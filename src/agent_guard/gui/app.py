@@ -34,12 +34,13 @@ class MainWindow(QMainWindow):
     def __init__(self, guard: AgentGuard) -> None:
         super().__init__()
         self.guard = guard
-        self.bridge = Bridge()
+        self.bridge = Bridge(self)  # parented, so Qt tears it down with the window tree
         self.setWindowTitle(APP_NAME)
         self.setWindowIcon(app_icon())
         self.resize(1240, 820)
         self.setMinimumSize(980, 640)
         self._quitting = False
+        self._stopped = False
 
         root = QWidget()
         root.setObjectName("root")
@@ -104,12 +105,12 @@ class MainWindow(QMainWindow):
 
         # tray
         self.tray = QSystemTrayIcon(app_icon(), self)
-        menu = QMenu()
-        menu.addAction(QAction("Open Agent Guard", self, triggered=self.show_normal))
-        menu.addAction(QAction("Run scan", self, triggered=lambda: (self.show_normal(), self.navigate("net"))))
-        menu.addSeparator()
-        menu.addAction(QAction("Quit", self, triggered=self.quit))
-        self.tray.setContextMenu(menu)
+        self._tray_menu = QMenu()  # kept on self: setContextMenu does not take ownership
+        self._tray_menu.addAction(QAction("Open Agent Guard", self, triggered=self.show_normal))
+        self._tray_menu.addAction(QAction("Run scan", self, triggered=lambda: (self.show_normal(), self.navigate("net"))))
+        self._tray_menu.addSeparator()
+        self._tray_menu.addAction(QAction("Quit", self, triggered=self.quit))
+        self.tray.setContextMenu(self._tray_menu)
         self.tray.activated.connect(
             lambda r: self.show_normal() if r in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick) else None
         )
@@ -172,14 +173,34 @@ class MainWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
+    def stop(self) -> None:
+        """Deterministic teardown: stop timers and drop every reference that
+        points back at our widgets, so nothing fires while Qt and Python unwind
+        at interpreter exit. Idempotent — safe to call from closeEvent and again
+        from main() after the event loop returns."""
+        if self._stopped:
+            return
+        self._stopped = True
+        try:
+            self.timer.stop()
+        except Exception:
+            pass
+        try:
+            self.guard.alert_listeners.clear()  # this listener lambda captures self.bridge
+        except Exception:
+            pass
+        try:
+            self.tray.hide()
+        except Exception:
+            pass
+
     def closeEvent(self, e) -> None:  # noqa: N802
         if not self._quitting and self.guard.settings.minimize_to_tray and self.tray.isVisible():
             e.ignore()
             self.hide()
             self.notify(APP_NAME, "Still watching in the background. Right-click the tray icon to quit.")
             return
-        self.timer.stop()
-        self.tray.hide()
+        self.stop()
         e.accept()
         QApplication.quit()
 
@@ -199,7 +220,14 @@ def main() -> int:
     guard = AgentGuard(Settings.load())
     win = MainWindow(guard)
     win.show()
-    return app.exec()
+    exit_code = app.exec()
+    # Tear the window down while the QApplication is still alive, so Qt controls
+    # the destruction order of the widgets (and the parented Bridge) rather than
+    # Python's garbage collector racing it at interpreter exit.
+    win.stop()
+    win.deleteLater()
+    app.processEvents()
+    return exit_code
 
 
 if __name__ == "__main__":
