@@ -22,7 +22,7 @@ classifiers = [
 # cryptomigrate) appears here — not as a dependency, not as an optional extra.
 dependencies = [
     "psutil>=5.9",
-    "cryptography>=42.0",
+    "cryptography>=50.0.2",
 ]
 
 [project.optional-dependencies]
