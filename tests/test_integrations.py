@@ -71,7 +71,8 @@ def test_sentinel_vision_adapter_degrades_to_notes_never_exceptions():
     assert adapter.scan("/some/binary")["verdict"] == "unknown"
     assert "no firewall" in adapter.block_ip("203.0.113.9")
     assert "no sentinel-vision" in adapter.quarantine_add("/some/binary", "pacified")
-    assert adapter.protected_store_dir() is None
+    assert "no sentinel-vision plugin-log" in adapter.plugin_log_append({"event": "x"})
+    assert adapter.plugin_log_verify()["intact"] is None
 
 
 def test_cryptomigrate_adapter_degrades_to_notes_never_exceptions(tmp_path):
@@ -235,3 +236,45 @@ def test_scan_verdicts_come_from_the_cli_output(sv_cli, stdout, verdict):
 
     assert result["verdict"] == verdict
     assert sv_cli.calls[0][:3] == ["/opt/sv/sentinel-vision-cli", "scan", "/some/binary"]
+
+
+# ----------------------------------------------------------- SV 0.4.1 protected log
+def test_plugin_log_append_uses_the_cli_when_present(sv_cli):
+    detail = sentinel_vision.SentinelVisionAdapter().plugin_log_append({"event": "pacify", "agent": "rogue-1"})
+
+    assert "protected log" in detail
+    assert sv_cli.calls[0][:4] == ["/opt/sv/sentinel-vision-cli", "plugin-log", "append", "agent-guard"]
+    assert sv_cli.calls[0][4] == "--json"
+    assert json.loads(sv_cli.calls[0][5]) == {"event": "pacify", "agent": "rogue-1"}
+
+
+def test_pacify_mirrors_a_record_to_the_protected_log_when_present(guard):
+    appended: list[dict] = []
+    guard.sv = types.SimpleNamespace(plugin_log_append=lambda rec: appended.append(rec) or "ok")
+    agent = types.SimpleNamespace(
+        pid=None, agent_id="rogue-1", state="flagged", label="rogue",
+        proc=types.SimpleNamespace(exe=None),
+    )
+
+    guard.pacify(agent, "revoke", auto=True)
+
+    assert len(appended) == 1
+    assert appended[0]["event"] == "pacify"
+    assert appended[0]["agent"] == "rogue-1"
+    assert appended[0]["rung"] == "revoke"
+    assert "audit_head" in appended[0]
+
+
+def test_plugin_pages_are_namespaced_to_avoid_host_key_collisions():
+    pytest.importorskip("PySide6")
+    from agent_guard.gui.plugin import register
+
+    pages = register()
+    keys = [p.key for p in pages]
+
+    assert keys, "register() returned no pages"
+    assert all(k.startswith("ag_") for k in keys)
+    # sentinel-vision skips a plugin page whose key matches one of its built-ins
+    sv_builtins = {"overview", "quarantine", "settings", "scan", "network", "history", "protection"}
+    assert not (set(keys) & sv_builtins)
+    assert all(p.label.startswith("AG ·") for p in pages)

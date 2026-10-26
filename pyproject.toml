@@ -51,3 +51,11 @@ where = ["src"]
 [tool.ruff]
 line-length = 118
 target-version = "py310"
+
+[tool.ruff.lint]
+# High-signal families. Broad `except` (BLE), try/except/pass (S110) and manual
+# subprocess returncode checks (PLW1510) are deliberate here — the integration
+# adapters must degrade gracefully and never crash the host — so they are not selected.
+select = ["E", "F", "I", "UP", "RUF"]
+# Long lines are almost all inline GUI stylesheet / f-strings, kept readable in place.
+ignore = ["E501"]

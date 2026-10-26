@@ -17,7 +17,7 @@ class TaskSignals(QObject):
 
 
 class Task(QRunnable):
-    def __init__(self, fn: Callable[["Task"], object]) -> None:
+    def __init__(self, fn: Callable[[Task], object]) -> None:
         super().__init__()
         self.fn = fn
         self.signals = TaskSignals()

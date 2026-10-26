@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from agent_guard.gui import theme
 from agent_guard.gui.context import GuardContext
 
 

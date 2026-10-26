@@ -25,7 +25,7 @@ from agent_guard.integrations import sentinel_vision as sv_integ
 from agent_guard.mesh import Consensus, MeshSnapshot, MixChannel
 from agent_guard.quarantine import Quarantine
 from agent_guard.registry import RevocationRegistry
-from agent_guard.response import Containment, Response, Rung, RUNG_BY_NAME
+from agent_guard.response import RUNG_BY_NAME, Containment, Response, Rung
 from agent_guard.tripwire import Tripwire
 
 Alert = Callable[[str, str, str], None]  # (title, text, level)
@@ -68,6 +68,8 @@ class AgentGuard:
             if self.partners.sentinel_vision
             else Containment(self.quarantine)
         )
+        # kept for mirroring containment records into sentinel-vision's protected log
+        self.sv = sv_integ.SentinelVisionAdapter() if self.partners.sentinel_vision else None
         self.response = Response(self.registry, self.signer, self.audit, self.containment, escalate=self._escalate)
         # state
         self._sanctioned: dict[str, AgentIdentity] = {}
@@ -143,7 +145,29 @@ class AgentGuard:
         results = self.response.pacify(d, target, auto=auto, exe_path=exe)
         d.state = "contained"
         self._alert("Agent pacified", f"{d.label} (pid {d.pid}) contained → {target.name.lower()}", "danger")
+        self._mirror_to_protected_log(
+            {
+                "event": "pacify",
+                "agent": d.agent_id or f"pid:{d.pid}",
+                "pid": d.pid,
+                "rung": target.name.lower(),
+                "auto": auto,
+                "audit_head": self.audit.head,
+                "audit_signature": self.audit.sign_head(),
+            }
+        )
         return results
+
+    def _mirror_to_protected_log(self, record: dict) -> None:
+        """When sentinel-vision is present, also append the record to its
+        tamper-proof, append-only plugin log, so a compromised agent cannot erase
+        its own containment record even if it reaches Agent Guard's own store."""
+        if self.sv is None:
+            return
+        try:
+            self.sv.plugin_log_append(record)
+        except Exception:
+            pass
 
     def release(self, d: DetectedAgent):
         res = self.response.release(d)

@@ -86,7 +86,7 @@ def cmd_register(g: AgentGuard, args) -> int:
 
 def cmd_watch(g: AgentGuard, args) -> int:
     print(f"{APP_NAME} watching every {g.settings.scan_interval_s}s. Ctrl-C to stop.")
-    g.alert_listeners.append(lambda t, x, l: print(f"  [{l:<7}] {t}: {x}"))
+    g.alert_listeners.append(lambda t, x, lvl: print(f"  [{lvl:<7}] {t}: {x}"))
     try:
         while True:
             g.scan()

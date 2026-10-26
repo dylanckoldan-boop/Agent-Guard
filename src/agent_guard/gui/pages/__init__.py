@@ -20,6 +20,12 @@ NAV = [
 ]
 
 __all__ = [
-    "NAV", "Page", "DashboardPage", "NetPage", "DetectionsPage",
-    "MeshPage", "QuarantinePage", "SettingsPage",
+    "NAV",
+    "DashboardPage",
+    "DetectionsPage",
+    "MeshPage",
+    "NetPage",
+    "Page",
+    "QuarantinePage",
+    "SettingsPage",
 ]

@@ -28,4 +28,4 @@ def partner_status() -> PartnerStatus:
     return PartnerStatus(sv, sv_how, cm, cm_how)
 
 
-__all__ = ["partner_status", "PartnerStatus", "sentinel_vision", "cryptomigrate"]
+__all__ = ["PartnerStatus", "cryptomigrate", "partner_status", "sentinel_vision"]

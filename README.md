@@ -82,10 +82,10 @@ Authentication proves *who* is talking; mixing hides *that* they are, and to who
 
 Agent Guard runs entirely on its own. When the partners are installed, it opens a port:
 
-- **sentinel-vision** lends its *hands* — `scan` an agent's binary for a verdict, `block_egress` at the OS firewall, hand the binary to its hardened vault with rollback, and store the audit in its admin-only protected directory (the real Layer-4 Wall). Under Route B, Agent Guard's pages even appear as a tab *inside* sentinel-vision, with no dependency either way.
+- **sentinel-vision** lends its *hands* — `scan` an agent's binary for a verdict, `block_egress` at the OS firewall, hand the binary to its hardened vault with rollback (the file is moved, not copied), and mirror every containment into its protected, append-only plugin log that even a program running as you cannot erase (the real Layer-4 Wall). Under Route B — implemented in **sentinel-vision 0.4.1** — Agent Guard's pages appear as a tab *inside* sentinel-vision, with no dependency either way.
 - **cryptomigrate** is the *notary and crypto lens* — scan a flagged agent's directory for weak crypto, and emit PQ-signed attestations of oversight state.
 
-The integration contract and the exact (additive-only) changes each partner needs are in [`docs/SENTINEL_VISION_INTEGRATION.md`](docs/SENTINEL_VISION_INTEGRATION.md).
+How Agent Guard plugs into sentinel-vision (the entry point, the `quarantine add` / `plugin-log` / `net block` verbs, and the Windows plugin install) is in [`docs/SENTINEL_VISION_INTEGRATION.md`](docs/SENTINEL_VISION_INTEGRATION.md).
 
 ## What the tests prove
 

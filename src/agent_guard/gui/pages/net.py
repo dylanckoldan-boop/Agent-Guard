@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHBoxLayout, QMenu, QMessageBox, QPushButton
+from PySide6.QtWidgets import QAbstractItemView, QHBoxLayout, QHeaderView, QMenu, QMessageBox, QPushButton, QTableView
 
 from agent_guard.gui import theme
 from agent_guard.gui.pages.base import Page
 from agent_guard.gui.widgets import RowTableModel, card, label
-from agent_guard.response import Rung
-from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableView
 
 
 class NetPage(Page):

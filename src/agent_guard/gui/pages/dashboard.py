@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QVBoxLayout
 
 from agent_guard.gui import theme
 from agent_guard.gui.pages.base import Page
-from agent_guard.gui.widgets import StatCard, card, chip, label
+from agent_guard.gui.widgets import StatCard, card, label
 
 
 class DashboardPage(Page):

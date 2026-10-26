@@ -177,12 +177,17 @@ When installed alongside it, each is a pure upgrade:
   known malware, validly signed, or clean?
 * **block_egress(ip)** makes the ladder's "cut egress" rung a real system-wide
   OS-firewall block against known criminal netblocks.
-* **quarantine.add(binary)** hands the neutralized binary to SV's hardened,
-  service-protected vault with rollback — SV becomes the system-of-record.
-* **protected store** — SV's admin-only service directory, where Agent Guard can
-  keep its audit + registry so a compromised agent cannot erase its own
-  containment record. This is the real Layer-4 Wall: a path the agent can't
-  address, made true at the OS level rather than by an un-passed reference.
+* **quarantine add (binary)** hands the neutralized binary to SV's hardened,
+  service-protected vault with rollback — the file is moved, and SV becomes the
+  system-of-record.
+* **protected plugin log** — Agent Guard mirrors every containment (with its
+  signed audit head) into SV's append-only `plugin-log`, which on Windows the
+  protection service keeps where a program running as the user can add and read
+  but cannot change or delete. So a compromised agent cannot erase its own
+  containment record even if it reaches Agent Guard's own store. This is the real
+  Layer-4 Wall: made true at the OS level rather than by an un-passed reference.
+  (SV's `config.plugin_dir` is an ordinary user folder and is deliberately *not*
+  used for these records.)
 
 **cryptomigrate** (the notary and crypto lens):
 * **crypto_scan(dir)** surfaces weak crypto (hardcoded keys, DES/SHA-1, obsolete

@@ -34,7 +34,6 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 try:  # strong classical signatures — present wherever `cryptography` is installed
-    from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives.asymmetric import ed25519
 
     _HAVE_ED25519 = True
@@ -65,7 +64,7 @@ class Signer(Protocol):
     def can_sign(self) -> bool: ...
     def sign(self, message: bytes) -> str: ...
     def verify(self, message: bytes, signature: str) -> bool: ...
-    def verifier(self) -> "Signer": ...
+    def verifier(self) -> Signer: ...
     def public_bytes(self) -> bytes: ...
 
 
@@ -98,7 +97,7 @@ class HMACSigner:
         except Exception:
             return False
 
-    def verifier(self) -> "HMACSigner":
+    def verifier(self) -> HMACSigner:
         return self  # symmetric: no separate public half
 
     def public_bytes(self) -> bytes:
@@ -109,12 +108,12 @@ class HMACSigner:
 class Ed25519Signer:
     scheme = "Ed25519"
 
-    def __init__(self, private: "ed25519.Ed25519PrivateKey | None", public: "ed25519.Ed25519PublicKey") -> None:
+    def __init__(self, private: ed25519.Ed25519PrivateKey | None, public: ed25519.Ed25519PublicKey) -> None:
         self._priv = private
         self._pub = public
 
     @classmethod
-    def generate(cls) -> "Ed25519Signer":
+    def generate(cls) -> Ed25519Signer:
         priv = ed25519.Ed25519PrivateKey.generate()
         return cls(priv, priv.public_key())
 
@@ -139,7 +138,7 @@ class Ed25519Signer:
         except Exception:
             return False
 
-    def verifier(self) -> "Ed25519Signer":
+    def verifier(self) -> Ed25519Signer:
         return Ed25519Signer(None, self._pub)
 
     def public_bytes(self) -> bytes:
@@ -150,7 +149,7 @@ class Ed25519Signer:
         )
 
     @classmethod
-    def from_public_bytes(cls, raw: bytes) -> "Ed25519Signer":
+    def from_public_bytes(cls, raw: bytes) -> Ed25519Signer:
         return cls(None, ed25519.Ed25519PublicKey.from_public_bytes(raw))
 
 
@@ -170,7 +169,7 @@ class HybridSigner:
         self._ed_pub = ed_pub
 
     @classmethod
-    def generate(cls) -> "HybridSigner":
+    def generate(cls) -> HybridSigner:
         mp = mldsa.MLDSA65PrivateKey.generate()
         ep = ed25519.Ed25519PrivateKey.generate()
         return cls(mp, mp.public_key(), ep, ep.public_key())
@@ -202,7 +201,7 @@ class HybridSigner:
         except Exception:
             return False
 
-    def verifier(self) -> "HybridSigner":
+    def verifier(self) -> HybridSigner:
         return HybridSigner(None, self._mldsa_pub, None, self._ed_pub)
 
     def public_bytes(self) -> bytes:
@@ -215,7 +214,7 @@ class HybridSigner:
         return mldsa_raw + ed_raw
 
     @classmethod
-    def from_public_bytes(cls, raw: bytes) -> "HybridSigner":
+    def from_public_bytes(cls, raw: bytes) -> HybridSigner:
         mldsa_pub = mldsa.MLDSA65PublicKey.from_public_bytes(raw[: cls._MLDSA_PUB])
         ed_pub = ed25519.Ed25519PublicKey.from_public_bytes(raw[cls._MLDSA_PUB :])
         return cls(None, mldsa_pub, None, ed_pub)

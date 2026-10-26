@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
     QTableView,
 )
 
-from agent_guard.gui import theme
 from agent_guard.gui.pages.base import Page
 from agent_guard.gui.widgets import RowTableModel, card, label
 

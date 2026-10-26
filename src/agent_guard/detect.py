@@ -21,7 +21,6 @@ result (never an error) where ``psutil`` is absent.
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
 
 from agent_guard.config import Settings

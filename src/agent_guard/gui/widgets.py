@@ -6,7 +6,7 @@ import math
 from collections.abc import Callable, Sequence
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QPointF, QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from agent_guard.gui import theme
@@ -133,7 +133,7 @@ class MeshWidget(QWidget):
         self._snap = snap
         self.update()
 
-    def paintEvent(self, _e) -> None:  # noqa: N802
+    def paintEvent(self, _e) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
@@ -214,10 +214,10 @@ class RowTableModel(QAbstractTableModel):
         self.objects = objects if objects is not None else rows
         self.endResetModel()
 
-    def rowCount(self, parent=QModelIndex()) -> int:  # noqa: N802
+    def rowCount(self, parent=QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self.rows)
 
-    def columnCount(self, parent=QModelIndex()) -> int:  # noqa: N802
+    def columnCount(self, parent=QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self.headers)
 
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole):
@@ -235,7 +235,7 @@ class RowTableModel(QAbstractTableModel):
             return self.objects[r]
         return None
 
-    def headerData(self, section: int, orientation, role: int = Qt.DisplayRole):  # noqa: N802
+    def headerData(self, section: int, orientation, role: int = Qt.DisplayRole):
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
             return self.headers[section]
         return None

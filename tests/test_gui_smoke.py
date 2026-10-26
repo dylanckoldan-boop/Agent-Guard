@@ -203,7 +203,8 @@ def test_plugin_register_returns_a_page_descriptor_per_nav_entry():
     pages = plugin.register()
 
     assert pages
-    assert [p.key for p in pages] == KEYS
+    # keys are namespaced with "ag_" so they never collide with a sentinel-vision built-in
+    assert [p.key for p in pages] == [f"ag_{k}" for k in KEYS]
     assert all(p.label and callable(p.factory) for p in pages)
 
 
@@ -216,7 +217,7 @@ def test_each_plugin_factory_builds_a_widget(host, track):
 
 
 def test_hosted_pages_forward_guard_alerts_to_the_host(host, track):
-    overview = next(p for p in plugin.register() if p.key == "overview")
+    overview = next(p for p in plugin.register() if p.key == "ag_overview")
     page = overview.factory(host)
     track(page)
 

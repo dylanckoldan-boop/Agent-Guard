@@ -100,7 +100,7 @@ class Settings:
         return data_root() / "settings.json"
 
     @classmethod
-    def load(cls) -> "Settings":
+    def load(cls) -> Settings:
         p = cls.path()
         if not p.exists():
             s = cls()

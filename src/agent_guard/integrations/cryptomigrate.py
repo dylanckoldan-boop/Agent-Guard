@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import shutil
 import time
-from pathlib import Path
 
 
 def probe() -> tuple[bool, str]:
@@ -43,7 +42,7 @@ class CryptomigrateAdapter:
     def __init__(self) -> None:
         self._mod = None
         try:
-            import cryptomigrate  # noqa: F401
+            import cryptomigrate
 
             self._mod = cryptomigrate
         except Exception:

@@ -30,12 +30,12 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from pathlib import Path
 
 from agent_guard.quarantine import Quarantine
 from agent_guard.response import Containment
 
 _CLI = "sentinel-vision-cli"
+_PLUGIN_NAME = "agent-guard"  # the name sentinel-vision files Agent Guard's records under
 
 
 def probe() -> tuple[bool, str]:
@@ -61,7 +61,7 @@ class SentinelVisionAdapter:
     def __init__(self) -> None:
         self._mod = None
         try:
-            import sentinel_vision  # noqa: F401
+            import sentinel_vision
 
             self._mod = sentinel_vision
         except Exception:
@@ -110,6 +110,11 @@ class SentinelVisionAdapter:
 
     # -- quarantine (Route B verb) ------------------------------------------
     def quarantine_add(self, path: str, reason: str) -> str:
+        """Hand a binary to sentinel-vision's vault. In SV 0.4.1 the file is
+        *moved* (encrypted in, original deleted); on success the CLI prints only
+        the new id and exits 0, and on any problem it exits 2 and nothing changes
+        (it refuses OS files and SV's own files). ``--source`` defaults to
+        ``agent-guard`` on SV's side, so it is not passed here."""
         if self._cli:
             try:
                 out = subprocess.run(
@@ -117,23 +122,54 @@ class SentinelVisionAdapter:
                     capture_output=True, text=True, timeout=60,
                 )
                 if out.returncode == 0:
-                    return f"handed to sentinel-vision vault: {out.stdout.strip() or 'ok'}"
-                return f"sentinel-vision quarantine add unavailable (needs Route-B verb): {out.stderr.strip()}"
+                    return f"handed to sentinel-vision vault (id {out.stdout.strip() or '?'})"
+                return f"sentinel-vision quarantine add unavailable: {out.stderr.strip()}"
             except Exception as exc:
                 return f"quarantine add failed: {exc}"
         return "no sentinel-vision quarantine surface available"
 
-    def protected_store_dir(self) -> str | None:
-        """SV's admin-only protected directory, if exposed (Route-B optional seam)."""
+    # -- protected, append-only records -------------------------------------
+    def plugin_log_append(self, record: dict) -> str:
+        """Append a record to sentinel-vision's protected, append-only plugin log
+        — its 'records nothing else can erase'. On Windows the protection service
+        keeps it where a program running as the user can add and read but cannot
+        change or delete. config.plugin_dir is deliberately NOT used: it is an
+        ordinary user folder, not protected. Prefers the in-process API, falls
+        back to the CLI."""
         if self._mod is not None:
             try:
-                from sentinel_vision import config as sv_config  # type: ignore
+                from sentinel_vision.plugin_api import plugin_log  # type: ignore
 
-                d = Path(sv_config.sub_dir("agent-guard"))  # type: ignore[attr-defined]
-                return str(d)
+                plugin_log(_PLUGIN_NAME).append(record)
+                return "appended to sentinel-vision protected log (in-process)"
             except Exception:
-                return None
-        return None
+                pass  # fall through to the CLI
+        if self._cli:
+            try:
+                out = subprocess.run(
+                    [self._cli, "plugin-log", "append", _PLUGIN_NAME, "--json", json.dumps(record)],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if out.returncode == 0:
+                    return "appended to sentinel-vision protected log"
+                return f"plugin-log append unavailable: {out.stderr.strip()}"
+            except Exception as exc:
+                return f"plugin-log append failed: {exc}"
+        return "no sentinel-vision plugin-log surface available"
+
+    def plugin_log_verify(self) -> dict:
+        """Ask sentinel-vision whether Agent Guard's protected log chain is intact."""
+        if self._cli:
+            try:
+                out = subprocess.run(
+                    [self._cli, "plugin-log", "verify", _PLUGIN_NAME],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if out.returncode == 0:
+                    return json.loads(out.stdout or "{}")
+            except Exception:
+                pass
+        return {"intact": None, "detail": "no sentinel-vision plugin-log surface available"}
 
 
 def make_containment(quarantine: Quarantine | None) -> Containment:

@@ -27,9 +27,9 @@ firewall and hardened vault.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Callable
 
 from agent_guard.crypto import AuditLog, Signer
 from agent_guard.quarantine import Quarantine

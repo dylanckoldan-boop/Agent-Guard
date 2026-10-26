@@ -119,7 +119,7 @@ class MainWindow(QMainWindow):
             self.tray.show()
 
         # guard alerts → UI thread
-        guard.alert_listeners.append(lambda t, x, l: self.bridge.alert.emit(t, x, l))
+        guard.alert_listeners.append(lambda t, x, lvl: self.bridge.alert.emit(t, x, lvl))
         self.bridge.alert.connect(self.notify)
 
         self.timer = QTimer(self)
@@ -194,7 +194,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def closeEvent(self, e) -> None:  # noqa: N802
+    def closeEvent(self, e) -> None:
         if not self._quitting and self.guard.settings.minimize_to_tray and self.tray.isVisible():
             e.ignore()
             self.hide()

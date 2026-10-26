@@ -23,8 +23,8 @@ its window, tray and notifications.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 
 @dataclass
@@ -51,11 +51,29 @@ def register() -> list[PluginPage]:
             navigate = getattr(host_ctx, "navigate", lambda *a, **k: None)
             ctx = GuardContext(guard, Bridge(), notify, navigate)
             page = cls(ctx)
-            guard.alert_listeners.append(lambda t, x, l: notify(t, x, l))
+            guard.alert_listeners.append(lambda t, x, lvl: notify(t, x, lvl))
             return page
 
         return build
 
-    # Drop the standalone-only "Settings" and "Overview" duplication if the host
-    # prefers; by default expose the operational pages.
-    return [PluginPage(key, label.strip(), _factory(cls)) for key, label, cls in NAV]
+    # The host skips any page whose key collides with one of its own built-ins
+    # (sentinel-vision has overview/quarantine/settings), so namespace every key
+    # with "ag_" and label it clearly so Agent Guard's pages are distinct in the
+    # host's sidebar.
+    def _label(nav_label: str) -> str:
+        name = nav_label.strip().split(None, 1)[-1]  # drop the leading glyph
+        return f"AG · {name}"
+
+    # Prefer the host's ready-made descriptor when hosted (it is importable only
+    # because sentinel-vision is the caller) so an isinstance check on its side
+    # still passes; fall back to our own duck-typed descriptor otherwise. This is
+    # not a dependency: the import lives inside register(), which only the host calls.
+    descriptor = PluginPage
+    try:
+        from sentinel_vision.plugin_api import PluginPage as _HostDescriptor  # type: ignore
+
+        descriptor = _HostDescriptor
+    except Exception:
+        pass
+
+    return [descriptor(f"ag_{key}", _label(label), _factory(cls)) for key, label, cls in NAV]
