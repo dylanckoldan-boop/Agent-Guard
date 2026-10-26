@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Guard — a containment net for autonomous AI agents</title>
+<meta name="description" content="Agent Guard holds an oversight net across your AI agents, catches rogue agent activity, and pacifies it reversibly within your own perimeter. Open source, runs on your machine, no telemetry.">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="favicon.svg">
+<meta property="og:title" content="Agent Guard">
+<meta property="og:description" content="A containment net for autonomous AI agents — detect rogue agent activity and pacify it, reversibly, within your own perimeter.">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="bar">
+    <a class="brand" href="index.html" aria-label="Agent Guard home">
+      <svg viewBox="0 0 28 32" aria-hidden="true" focusable="false"><path d="M14 1 L26 5.5 V15 C26 23 20 29 14 31 C8 29 2 23 2 15 V5.5 Z" fill="none" stroke="#2ee6c5" stroke-width="1.6"/><circle cx="14" cy="14" r="3.2" fill="#2ee6c5"/><path d="M14 17.2 V24" stroke="#2ee6c5" stroke-width="1.4"/></svg>
+      Agent Guard
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="#how">How it works</a>
+      <a href="#layers">The four layers</a>
+      <a href="#sentinel">With sentinel-vision</a>
+      <a href="#data">Your data</a>
+      <a href="#get">Get it</a>
+      <a href="https://github.com/dylanckoldan-boop/Agent-Guard">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+    <section class="hero" style="border-top:none">
+      <div>
+        <p class="eyebrow">Open source · runs on your machine</p>
+        <h1>A containment net for autonomous AI agents</h1>
+        <p class="lede">Agent Guard holds an oversight net across your AI agents, catches rogue agent activity, and <strong>pacifies</strong> it — graduated, reversible-first containment, only ever on resources you own.</p>
+        <div class="cta">
+          <a class="btn primary" href="https://github.com/dylanckoldan-boop/Agent-Guard">View on GitHub</a>
+          <a class="btn" href="#get">Get it</a>
+        </div>
+      </div>
+      <figure>
+        <svg class="mesh" viewBox="0 0 420 420" role="img" aria-labelledby="mesh-t mesh-d">
+          <title id="mesh-t">The Agent Guard oversight mesh</title>
+          <desc id="mesh-d">A radial web: a consensus core at the centre, a ring of sentinel nodes that observe and vote, and agents on the outer rim — most healthy, one flagged and contained, linked to the core by a dashed line.</desc>
+          <g class="m-grid">
+            <circle cx="210" cy="210" r="56"/><circle cx="210" cy="210" r="104"/><circle cx="210" cy="210" r="152"/><circle cx="210" cy="210" r="192"/>
+          </g>
+          <g class="m-grid">
+            <line x1="210" y1="210" x2="210" y2="18"/><line x1="210" y1="210" x2="346" y2="74"/><line x1="210" y1="210" x2="402" y2="210"/><line x1="210" y1="210" x2="346" y2="346"/><line x1="210" y1="210" x2="210" y2="402"/><line x1="210" y1="210" x2="74" y2="346"/><line x1="210" y1="210" x2="18" y2="210"/><line x1="210" y1="210" x2="74" y2="74"/>
+          </g>
+          <g class="m-sentinel">
+            <circle cx="210" cy="106" r="6"/><circle cx="314" cy="210" r="6"/><circle cx="210" cy="314" r="6"/><circle cx="106" cy="210" r="6"/>
+          </g>
+          <g class="m-ok">
+            <circle cx="210" cy="18" r="10"/><circle cx="346" cy="74" r="10"/><circle cx="402" cy="210" r="10"/><circle cx="74" cy="346" r="10"/><circle cx="18" cy="210" r="10"/><circle cx="74" cy="74" r="10"/>
+          </g>
+          <circle class="m-warn" cx="346" cy="346" r="10"/>
+          <line class="m-danger-line" x1="210" y1="236" x2="210" y2="378"/>
+          <circle class="m-danger-ring" cx="210" cy="402" r="14"/>
+          <circle class="m-danger" cx="210" cy="402" r="9"/>
+          <circle class="m-core" cx="210" cy="210" r="26"/>
+        </svg>
+      </figure>
+    </section>
+
+    <section id="how">
+      <h2>One net, two threats</h2>
+      <p class="lead">An AI agent with tools and network access can go wrong two ways. Agent Guard is built to catch both with one apparatus — by not trusting the model to hold a boundary, and constraining what it can reach.</p>
+      <div class="two" style="margin-top:1.25rem">
+        <div class="panel">
+          <h3>The misaligned agent</h3>
+          <p class="lead">Sanctioned, valid credentials, but its objective is wrong at the edges — it treats a safety-critical or off-limits action as just another lever. An alignment failure at the machine boundary.</p>
+        </div>
+        <div class="panel">
+          <h3>The hijacked agent</h3>
+          <p class="lead">A legitimate agent subverted by indirect prompt injection, now acting for someone else. Its first tell is almost always a network move — exfiltration, a new command-and-control endpoint, a reach it never made before.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="layers">
+      <h2>Defence in depth, in four layers</h2>
+      <p class="lead">Defeating any one layer still leaves the next. The guarantees live in the ladder, the signed registry and the independent controls — never in an agent staying fooled.</p>
+      <div class="cards">
+        <div class="card"><div class="n">Layer 1</div><h3>Admission</h3><p>Nothing runs unattested. Agents carry signed, least-privilege identity and are continuously verified.</p></div>
+        <div class="card"><div class="n">Layer 2</div><h3>The net</h3><p>No legitimate agent touches a decoy, so any contact is an intrusion — the one signal with ~zero false positives.</p></div>
+        <div class="card"><div class="n">Layer 3</div><h3>Pacify ladder</h3><p>Throttle → quarantine → revoke → suspend → terminate, climbing only as far as the threat demands, all inside your own perimeter.</p></div>
+        <div class="card"><div class="n">Layer 4</div><h3>Consensus + audit</h3><p>A flag contains only on a signed quorum; every step lands in a hash-chained, post-quantum-signed, tamper-evident log.</p></div>
+      </div>
+      <p style="margin-top:1.5rem"><a href="https://github.com/dylanckoldan-boop/Agent-Guard/blob/main/docs/ARCHITECTURE.md">Read the full architecture →</a></p>
+    </section>
+
+    <section id="sentinel">
+      <h2>Stronger with sentinel-vision</h2>
+      <div class="two">
+        <div>
+          <p class="lead">Agent Guard runs fully on its own. When <a href="https://dylanckoldan-boop.github.io/sentinel-vision/">sentinel-vision</a> — a free, open-source antimalware app — is installed alongside it, the net supercharges it: Agent Guard catches a category sentinel-vision can't see on its own (a rogue <em>agent</em>, judged by identity and behaviour), and uses sentinel-vision's engines to confirm the verdict, block egress at the OS firewall, and lock the binary in its hardened vault.</p>
+          <p class="lead">Together they cover both the hijacked/malware agent and the misaligned one — neither tool fully catches alone. Agent Guard even appears as a tab inside sentinel-vision, with no dependency in either direction.</p>
+          <p><a class="btn" href="https://dylanckoldan-boop.github.io/sentinel-vision/">Visit sentinel-vision</a></p>
+        </div>
+        <div class="panel">
+          <p class="pill">optional · never a dependency</p>
+          <ul class="ticks" style="margin-top:1rem">
+            <li>Scan an agent's binary for a verdict</li>
+            <li>Block its egress at the system firewall</li>
+            <li>Move the binary into an encrypted vault with rollback</li>
+            <li>Mirror every containment into a protected, append-only log an agent can't erase</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="data">
+      <h2>Your data stays yours</h2>
+      <ul class="ticks">
+        <li><strong>Runs on your machine.</strong> No account, no cloud, no telemetry. Agent Guard never phones home.</li>
+        <li><strong>On-device storage.</strong> Its signing and quarantine keys, settings and audit live in your own user data folder — nothing is uploaded.</li>
+        <li><strong>Open source (MIT).</strong> Every line is auditable, and correctness is established by the test suite, not by assertion.</li>
+        <li><strong>This website</strong> is plain HTML and CSS: no JavaScript, no cookies, no analytics, nothing loaded from other servers.</li>
+      </ul>
+      <p><a href="privacy.html">Read the privacy policy →</a></p>
+    </section>
+
+    <section id="get">
+      <h2>Get it</h2>
+      <p class="lead">Python 3.10+. The core needs only <code>psutil</code> and <code>cryptography</code>; add the desktop app with the <code>gui</code> extra.</p>
+      <pre><code>git clone https://github.com/dylanckoldan-boop/Agent-Guard
+cd Agent-Guard
+pip install -e ".[gui]"
+
+agent-guard-cli status     # the command line
+agent-guard                # the desktop app</code></pre>
+      <p><a class="btn primary" href="https://github.com/dylanckoldan-boop/Agent-Guard">Source &amp; releases on GitHub</a></p>
+    </section>
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="flinks">
+      <a href="https://github.com/dylanckoldan-boop/Agent-Guard">Source code</a>
+      <a href="https://github.com/dylanckoldan-boop/Agent-Guard/releases/latest">Releases</a>
+      <a href="https://github.com/dylanckoldan-boop/Agent-Guard/security/advisories/new">Report a vulnerability</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="https://dylanckoldan-boop.github.io/sentinel-vision/">sentinel-vision</a>
+    </div>
+    <p>Agent Guard is a research project. The deception layers are not safety-rated; the guarantees live in the pacify ladder, the signed registry and the independent controls. MIT licensed · © 2026 Dylan C. Koldan.</p>
+  </div>
+</footer>
+</body>
+</html>
