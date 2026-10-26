@@ -65,6 +65,7 @@ A control-room GUI (PySide6) in the same palette as sentinel-vision:
 - **Overview** — status hero, the fleet at a glance, live detections, the pacify ladder.
 - **The Net** — every agent process, mapped to its identity and scored on reach and behaviour, with the pacify ladder in a right-click menu.
 - **Detections** — the ladder for the latest containment and the signed audit trail.
+- **Alignment preferences** — choose which discretionary behaviours count as misaligned (reading your files, new egress, spawning programs, …); the zero-false-positive safety signals stay locked on.
 - **Mesh** — the oversight spiderweb: consensus core, the sentinel voting ring, agents on the rim colored by state, and the "many doors" panel.
 - **Quarantine** — neutralized binaries, encrypted and restorable.
 - **Settings** — containment authority, oversight mixing, partner status.

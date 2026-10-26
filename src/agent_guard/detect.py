@@ -21,8 +21,10 @@ result (never an error) where ``psutil`` is absent.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 
+from agent_guard.align import enabled
 from agent_guard.config import Settings
 from agent_guard.identity import Scope
 
@@ -94,41 +96,54 @@ def score_agent(
     decoy_hit: bool = False,
     seen_hosts: set[str] | None = None,
 ) -> tuple[int, list[Reason]]:
-    """Pure risk score in 0..100 with itemized reasons. No side effects."""
+    """Pure risk score in 0..100 with itemized reasons. No side effects.
+
+    Every signal except a decoy contact is gated by the operator's alignment
+    preferences (``settings.alignment``); a decoy touch is always scored."""
     reasons: list[Reason] = []
 
     if decoy_hit:
         reasons.append(Reason("touched a decoy / honeytoken", 100, "tripwire"))
         return 100, reasons
 
-    if not sanctioned:
+    align = settings.alignment
+
+    if not sanctioned and enabled(align, "unregistered"):
         reasons.append(Reason("unregistered agent — no valid credential", 35, "identity"))
 
     # reach
     hosts = [h.rsplit(":", 1)[0] for h in proc.remote_hosts]
     public = [h for h in hosts if not _is_local(h)]
-    if scope is not None and sanctioned:
+    if enabled(align, "scope_egress") and scope is not None and sanctioned:
         for h in public:
             if not scope.permits_host(h):
                 reasons.append(Reason(f"egress outside scope → {h}", 18, "reach"))
                 break
-    if len(public) >= 8:
+    if enabled(align, "fan_out") and len(public) >= 8:
         reasons.append(Reason(f"fan-out to {len(public)} remote peers", 15, "reach"))
-    if seen_hosts is not None:
+    if enabled(align, "new_egress") and seen_hosts is not None:
         novel = [h for h in public if h not in seen_hosts]
         if novel:
             reasons.append(Reason(f"new egress never seen before → {novel[0]}", 12, "reach"))
 
     # behaviour
-    if proc.child_count > 0:
+    if enabled(align, "child_spawn") and proc.child_count > 0:
         if scope is not None and not scope.may_spawn:
             reasons.append(Reason(f"spawned {proc.child_count} child process(es), scope forbids", 20, "behaviour"))
         elif proc.child_count >= 5:
             reasons.append(Reason(f"spawned {proc.child_count} child processes", 10, "behaviour"))
-    if scope is not None and sanctioned:
+
+    if enabled(align, "file_access"):
+        # a sanctioned agent reaching outside the paths you granted it
+        if scope is not None and sanctioned:
+            for p in proc.touched_paths:
+                if not scope.permits_path(p):
+                    reasons.append(Reason(f"file outside granted scope: {p}", 20, "behaviour"))
+                    break
+        # any agent with files open under your sensitive folders
         for p in proc.touched_paths:
-            if not scope.permits_path(p):
-                reasons.append(Reason(f"touched path outside scope: {p}", 20, "behaviour"))
+            if _under_any(p, settings.sensitive_paths) and not (scope is not None and scope.permits_path(p)):
+                reasons.append(Reason(f"reading your files: {p}", 25, "behaviour"))
                 break
 
     score = min(100, sum(r.points for r in reasons))
@@ -136,6 +151,26 @@ def score_agent(
 
 
 # --------------------------------------------------------------------------- live
+def _under_any(path: str, prefixes: list[str]) -> bool:
+    p = path.replace("\\", "/")
+    for pre in prefixes:
+        base = pre.replace("\\", "/").rstrip("/")
+        if base and (p == base or p.startswith(base + "/")):
+            return True
+    return False
+
+
+def _open_files(pid: int, cap: int = 40) -> list[str]:
+    """Best-effort list of a process's currently open file paths (empty on any
+    permission or lookup error — never raises)."""
+    if not _HAVE_PSUTIL:
+        return []
+    try:
+        return [f.path for f in psutil.Process(pid).open_files()[:cap]]
+    except Exception:
+        return []
+
+
 def _is_local(host: str) -> bool:
     return (
         host in ("", "127.0.0.1", "::1", "localhost")
@@ -190,9 +225,8 @@ class Detector:
     ) -> list[DetectedAgent]:
         sanctioned_pids = sanctioned_pids or {}
         decoy_pids = decoy_pids or set()
-        import os
-
         own_pid = os.getpid()
+        file_rule = enabled(self.settings.alignment, "file_access")
         results: list[DetectedAgent] = []
         for proc in self.snapshot_processes():
             cmd_l = proc.cmd.lower()
@@ -200,6 +234,8 @@ class Detector:
                 continue  # never flag Agent Guard itself
             if not looks_like_agent(proc, self.settings):
                 continue
+            if file_rule and not proc.touched_paths:  # enrich only candidate agents (open_files is costly)
+                proc.touched_paths = _open_files(proc.pid)
             sanc = proc.pid in sanctioned_pids
             agent_id, scope = sanctioned_pids.get(proc.pid, (None, None))
             score, reasons = score_agent(

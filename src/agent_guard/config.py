@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from agent_guard import APP_NAME
+from agent_guard.align import DEFAULT_ALIGNMENT
 
 _DIR_NAME = "AgentGuard"
 
@@ -41,6 +42,12 @@ def sub_dir(name: str) -> Path:
     d = data_root() / name
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def default_sensitive_paths() -> list[str]:
+    """Folders an agent has no business rummaging through by default."""
+    home = Path.home()
+    return [str(home / d) for d in ("Documents", "Desktop", "Downloads")]
 
 
 @dataclass
@@ -90,6 +97,12 @@ class Settings:
 
     # --- crypto ------------------------------------------------------------
     signer_scheme: str = "auto"  # auto|hybrid|ed25519|hmac
+
+    # --- alignment preferences (what counts as misaligned; see align.py) ----
+    # Discretionary rules the operator toggles in the Alignment tab. The always-on
+    # safety signals (decoy contact) are not represented here — they can't be off.
+    alignment: dict[str, bool] = field(default_factory=lambda: dict(DEFAULT_ALIGNMENT))
+    sensitive_paths: list[str] = field(default_factory=default_sensitive_paths)
 
     # --- UI ----------------------------------------------------------------
     minimize_to_tray: bool = True

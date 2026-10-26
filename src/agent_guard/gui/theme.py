@@ -104,6 +104,12 @@ QHeaderView::section {{
     padding: 8px 6px; font-size: 10px; font-weight: 600; text-transform: uppercase;
 }}
 QTableView::item {{ padding: 4px 6px; border: none; }}
+QListWidget {{
+    background: {SURFACE_2}; border: 1px solid {BORDER}; border-radius: 10px; padding: 4px;
+    selection-background-color: #1d3340; selection-color: {TEXT};
+}}
+QListWidget::item {{ padding: 6px 8px; border-radius: 4px; }}
+QListWidget::item:selected {{ background: #1d3340; }}
 
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
 QScrollBar::handle:vertical {{ background: {BORDER_2}; border-radius: 4px; min-height: 30px; }}

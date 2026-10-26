@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from agent_guard.gui.pages.alignment import AlignmentPage
 from agent_guard.gui.pages.base import Page
 from agent_guard.gui.pages.dashboard import DashboardPage
 from agent_guard.gui.pages.detections import DetectionsPage
@@ -14,6 +15,7 @@ NAV = [
     ("overview", "◉  Overview", DashboardPage),
     ("net", "⊹  The Net", NetPage),
     ("detections", "!  Detections", DetectionsPage),
+    ("alignment", "◈  Alignment", AlignmentPage),
     ("mesh", "✸  Mesh", MeshPage),
     ("quarantine", "⊘  Quarantine", QuarantinePage),
     ("settings", "⚙  Settings", SettingsPage),
@@ -21,6 +23,7 @@ NAV = [
 
 __all__ = [
     "NAV",
+    "AlignmentPage",
     "DashboardPage",
     "DetectionsPage",
     "MeshPage",
