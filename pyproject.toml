@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-guard"
+version = "0.1.0"
+description = "A containment net for autonomous AI agents — detect rogue agent activity and pacify it, reversibly, within your own perimeter."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Dylan C. Koldan" }]
+keywords = ["ai-agents", "agent-security", "containment", "post-quantum", "oversight", "ai-safety"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+
+# The core is intentionally lean. Neither partner (sentinel-vision,
+# cryptomigrate) appears here — not as a dependency, not as an optional extra.
+dependencies = [
+    "psutil>=5.9",
+    "cryptography>=42.0",
+]
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.6"]
+dev = ["pytest>=7.4", "ruff>=0.4"]
+
+[project.scripts]
+agent-guard-cli = "agent_guard.cli:main"
+
+[project.gui-scripts]
+agent-guard = "agent_guard.gui.app:main"
+
+# Route B seam: when sentinel-vision is installed alongside Agent Guard, its
+# plugin host discovers this entry point and Agent Guard's pages appear as a tab
+# inside sentinel-vision — with no dependency in either direction. Harmless when
+# sentinel-vision is absent (nothing reads the group).
+[project.entry-points."sentinel_vision.plugins"]
+agent_guard = "agent_guard.gui.plugin:register"
+
+[project.urls]
+Homepage = "https://github.com/dylanckoldan-boop/Agent-Guard"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 118
+target-version = "py310"
