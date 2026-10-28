@@ -16,10 +16,20 @@ on even when the model itself is confused.
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass, field
 
 from agent_guard.crypto import Signer
+
+
+def _canonical(payload: dict) -> bytes:
+    """Deterministic, type-tagged bytes for a signature. The leading ``type``
+    domain-separates credentials from revocations and other signed records, so a
+    signature minted for one kind can never be replayed as another, and the
+    compact JSON is unambiguous — no field can be shifted across a delimiter the
+    way a ``|``-joined string allowed (see AG-F07)."""
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
 
 
 @dataclass(frozen=True)
@@ -49,7 +59,19 @@ class Scope:
         return any(host == h or host.endswith("." + h) for h in self.allowed_hosts)
 
     def permits_path(self, path: str) -> bool:
-        return any(path.startswith(p) for p in self.allowed_path_prefixes)
+        # A granted prefix permits a path only when the path is that directory or
+        # lies *beneath* it — the match must land on a path separator. A bare
+        # string prefix let "/home/proj" also admit "/home/proj-secrets", and let
+        # "/home/proj/../.ssh" slip through; normalizing and requiring a separator
+        # boundary closes both (see AG-F04).
+        if not self.allowed_path_prefixes:
+            return False
+        target = os.path.normcase(os.path.realpath(path))
+        for prefix in self.allowed_path_prefixes:
+            base = os.path.normcase(os.path.realpath(prefix))
+            if target == base or target.startswith(base + os.sep):
+                return True
+        return False
 
 
 @dataclass(frozen=True)
@@ -92,7 +114,13 @@ class TrustDomain:
 
     @staticmethod
     def _message(agent_id: str, scope: Scope, issued_at: float, issuer_ref: str) -> bytes:
-        return f"{agent_id}|{scope.canonical()}|{issued_at:.0f}|{issuer_ref}".encode()
+        return _canonical({
+            "type": "agent-guard/credential/v1",
+            "agent": agent_id,
+            "scope": scope.canonical(),
+            "issued_at": round(issued_at),
+            "issuer": issuer_ref,
+        })
 
     def issue(self, agent_id: str, scope: Scope) -> Credential:
         issued_at = time.time()
@@ -110,5 +138,5 @@ class TrustDomain:
 def verify_credential(verifier: Signer, cred: Credential) -> bool:
     """Standalone credential check for a holder of only the public verifier
     (e.g. a sentinel that must not be able to mint credentials)."""
-    msg = f"{cred.agent_id}|{cred.scope.canonical()}|{cred.issued_at:.0f}|{cred.issuer_ref}".encode()
+    msg = TrustDomain._message(cred.agent_id, cred.scope, cred.issued_at, cred.issuer_ref)
     return verifier.verify(msg, cred.signature)

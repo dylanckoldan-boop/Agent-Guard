@@ -148,15 +148,24 @@ def test_auto_falls_back_to_ed25519_when_mldsa_is_missing(monkeypatch):
         new_signer("hybrid")
 
 
-def test_auto_falls_back_to_hmac_without_the_cryptography_package(monkeypatch):
+def test_auto_never_falls_back_to_hmac_but_hmac_stays_available_explicitly(monkeypatch):
     monkeypatch.setattr(crypto, "_HAVE_MLDSA", False)
     monkeypatch.setattr(crypto, "_HAVE_ED25519", False)
 
-    s = new_signer()
-    assert s.scheme == "HMAC-SHA256"
-    assert s.verify(MSG, s.sign(MSG))
+    # 'auto' must fail closed, never silently downgrade to the symmetric HMAC
+    # fallback: a shared-key signer can't hand sentinels a verify-only handle, so
+    # a single compromised sentinel could forge revocations or an all-clear (AG-A09).
+    with pytest.raises(SignatureError):
+        new_signer()
+    with pytest.raises(SignatureError):
+        new_signer("auto")
     with pytest.raises(SignatureError):
         new_signer("ed25519")
+
+    # HMAC stays available for anyone who asks for it by name.
+    s = new_signer("hmac")
+    assert s.scheme == "HMAC-SHA256"
+    assert s.verify(MSG, s.sign(MSG))
 
 
 # ----------------------------------------------------------------------- audit log

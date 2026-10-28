@@ -19,6 +19,7 @@ mesh goes blind.
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
 
@@ -44,7 +45,16 @@ class RevocationRegistry:
 
     @staticmethod
     def _message(agent_id: str, reason: str, issued_at: float, issuer_ref: str) -> bytes:
-        return f"{agent_id}|{reason}|{issued_at:.0f}|{issuer_ref}".encode()
+        # Type-tagged canonical JSON: a revocation can't be forged by replaying a
+        # credential's signature, and no field can be shifted across a delimiter
+        # (agent_id="a|b", reason="c" is distinct from agent_id="a", reason="b|c").
+        return json.dumps({
+            "type": "agent-guard/revocation/v1",
+            "agent": agent_id,
+            "reason": reason,
+            "issued_at": round(issued_at),
+            "issuer": issuer_ref,
+        }, sort_keys=True, separators=(",", ":")).encode()
 
     def revoke(self, agent_id: str, reason: str, issuer: Signer) -> bool:
         """Mint and submit a revocation. ``issuer`` must be the circle's

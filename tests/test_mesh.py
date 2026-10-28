@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import random
+import json
 
 import pytest
 
@@ -103,20 +103,33 @@ def test_consensus_instances_do_not_share_their_sentinel_list():
 
 
 # ------------------------------------------------------------------------ mix channel
+def _sizes(batch):
+    return {len(frame) for frame in batch}
+
+
+def _schema(frame):
+    n = int.from_bytes(frame[:2], "big")
+    return tuple(sorted(json.loads(frame[2 : 2 + n]).keys()))
+
+
 def test_emit_pads_one_real_message_with_cover_traffic():
     channel = MixChannel(enabled=True, min_cover=3)
 
-    batch = channel.emit({"k": 1})
+    batch = channel.emit({"kind": "vote", "agent": "pid:1", "risk": 50})
 
     assert len(batch) == 4  # 1 real + 3 cover
-    real = [m for m in batch if m["_cover"] is False]
-    cover = [m for m in batch if m["_cover"] is True]
-    assert len(real) == 1
-    assert real[0]["k"] == 1
-    assert len(cover) == 3
-    assert all("k" not in m for m in cover)
-    assert all("_t" in m for m in batch)
+    assert all(isinstance(frame, bytes) for frame in batch)
     assert (channel.stats.real_emitted, channel.stats.cover_emitted, channel.stats.total) == (1, 3, 4)
+
+
+def test_real_and_cover_frames_are_indistinguishable_on_the_wire():
+    channel = MixChannel(enabled=True, min_cover=5)
+
+    batch = channel.emit({"kind": "vote", "agent": "pid:1", "risk": 50})
+
+    assert len(_sizes(batch)) == 1, "every frame must be the same size"
+    assert not any(b"_cover" in frame for frame in batch), "no frame may mark itself as cover"
+    assert {_schema(frame) for frame in batch} == {("agent", "kind", "risk")}, "cover apes the real schema"
 
 
 def test_urgent_messages_bypass_mixing():
@@ -125,7 +138,6 @@ def test_urgent_messages_bypass_mixing():
     batch = channel.emit({"k": 1}, urgent=True)
 
     assert len(batch) == 1
-    assert batch[0]["_cover"] is False
     assert (channel.stats.real_emitted, channel.stats.cover_emitted) == (1, 0)
 
 
@@ -135,7 +147,6 @@ def test_disabled_channel_emits_only_the_real_message():
     batch = channel.emit({"k": 1})
 
     assert len(batch) == 1
-    assert batch[0]["_cover"] is False
     assert (channel.stats.real_emitted, channel.stats.cover_emitted) == (1, 0)
 
 
@@ -164,11 +175,3 @@ def test_emit_does_not_mutate_the_record_it_was_given():
     MixChannel().emit(record)
 
     assert record == {"k": 1}
-
-
-def test_the_real_message_does_not_always_sit_in_the_same_slot():
-    channel = MixChannel(enabled=True, min_cover=3, rng=random.Random(7))
-
-    slots = {next(i for i, m in enumerate(channel.emit({"k": 1})) if not m["_cover"]) for _ in range(100)}
-
-    assert len(slots) > 1

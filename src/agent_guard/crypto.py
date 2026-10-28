@@ -231,6 +231,15 @@ def new_signer(scheme: str = "auto") -> Signer:
         return Ed25519Signer.generate()
     if scheme == "ed25519":
         raise SignatureError("Ed25519 requires the `cryptography` package")
+    if scheme == "auto":
+        # 'auto' must fail closed, never silently downgrade to the symmetric HMAC
+        # fallback: a shared-key signer cannot hand sentinels a verify-only handle,
+        # so a single compromised sentinel could forge revocations or an all-clear.
+        # HMAC stays available, but only when asked for by name (see AG-A09).
+        raise SignatureError(
+            "no asymmetric signer available; install `cryptography`, "
+            "or select scheme='hmac' explicitly to accept the symmetric fallback"
+        )
     return HMACSigner()
 
 

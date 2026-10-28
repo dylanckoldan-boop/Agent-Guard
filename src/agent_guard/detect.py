@@ -21,7 +21,9 @@ result (never an error) where ``psutil`` is absent.
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import re
 from dataclasses import dataclass, field
 
 from agent_guard.align import enabled
@@ -76,15 +78,55 @@ class DetectedAgent:
         return ", ".join(f"{r.label} (+{r.points})" for r in self.reasons) or "nominal"
 
 
+# Processes that carry "agent" in their name but are ordinary OS plumbing, never
+# AI agents. Matched by executable/command basename so a bare "agent" or "mcp"
+# marker can't be tricked into flagging them (see AG-F02).
+_SYSTEM_AGENTS = frozenset({
+    "ssh-agent", "gpg-agent", "gnome-keyring-daemon", "dbus-daemon", "dbus-launch",
+    "polkit-gnome-authentication-agent-1", "at-spi2-registryd", "goa-daemon",
+    "ssh-agent.exe", "gpg-agent.exe",
+})
+_WORD = "[a-z0-9]"  # a marker matches only on whole-token boundaries, not as a substring
+
+
+def _basename(p: str) -> str:
+    return p.replace("\\", "/").rsplit("/", 1)[-1].lower()
+
+
+def host_of(hostport: str) -> str:
+    """Just the host from 'host:port', '[v6]:port' or a bare host/IP. IPv6 is
+    bracketed on the wire (see Detector.snapshot_processes), so a bare address
+    full of colons is returned whole rather than truncated at the last colon."""
+    s = (hostport or "").strip()
+    if s.startswith("["):
+        return s[1:].split("]", 1)[0]
+    if s.count(":") == 1:  # host:port / ipv4:port — a lone colon is the port separator
+        return s.rsplit(":", 1)[0]
+    return s  # bare IPv6, or a host with no port
+
+
+def _is_system_agent(proc: ProcessInfo) -> bool:
+    first = proc.cmdline[0] if proc.cmdline else ""
+    return any(_basename(c) in _SYSTEM_AGENTS for c in (proc.name, proc.exe, first) if c)
+
+
 def looks_like_agent(proc: ProcessInfo, settings: Settings) -> bool:
     """First-pass filter: is this process a candidate AI-agent runtime at all?
-    Tunable via settings.agent_markers / llm_hosts — this is the net's mesh size."""
+
+    Markers and LLM hosts are tunable via settings — this is the net's mesh size —
+    but the lists can never be *emptied* to blind the net: Settings.load() restores
+    the built-in floor when settings.json tries (see config / AG-F05). Markers match
+    on whole-token boundaries, so ``ssh-agent`` is not ``agent`` and ``--user-agent``
+    is not an agent, and known system daemons are excluded outright (AG-F02)."""
+    if _is_system_agent(proc):
+        return False
     cmd = proc.cmd.lower()
-    if any(m in cmd for m in settings.agent_markers):
-        return True
-    if any(any(h in r for h in settings.llm_hosts) for r in proc.remote_hosts):
-        return True
-    return False
+    for marker in settings.agent_markers:
+        m = marker.strip().lower()
+        if m and re.search(rf"(?<!{_WORD}){re.escape(m)}(?!{_WORD})", cmd):
+            return True
+    hosts = [host_of(r).lower() for r in proc.remote_hosts]
+    return any(h == lh.lower() or h.endswith("." + lh.lower()) for h in hosts for lh in settings.llm_hosts)
 
 
 def score_agent(
@@ -112,7 +154,7 @@ def score_agent(
         reasons.append(Reason("unregistered agent — no valid credential", 35, "identity"))
 
     # reach
-    hosts = [h.rsplit(":", 1)[0] for h in proc.remote_hosts]
+    hosts = [host_of(h) for h in proc.remote_hosts]
     public = [h for h in hosts if not _is_local(h)]
     if enabled(align, "scope_egress") and scope is not None and sanctioned:
         for h in public:
@@ -160,6 +202,18 @@ def _under_any(path: str, prefixes: list[str]) -> bool:
     return False
 
 
+def _own_pid() -> int:
+    """Agent Guard's own process id.
+
+    The detector excludes only this one process so it never flags itself — unlike
+    the old rule, which skipped *any* process whose command line merely contained
+    ``agent_guard`` or ``agent-guard``. That string match was a blind spot an
+    attacker could hide behind just by passing ``--tag agent-guard`` (AG-A01 /
+    AG-F01). Agent Guard watches agents rather than launching them, so a candidate
+    that happens to be a child of the guard is still a candidate."""
+    return os.getpid()
+
+
 def _open_files(pid: int, cap: int = 40) -> list[str]:
     """Best-effort list of a process's currently open file paths (empty on any
     permission or lookup error — never raises)."""
@@ -171,14 +225,42 @@ def _open_files(pid: int, cap: int = 40) -> list[str]:
         return []
 
 
+# The defender's own machine or LAN. Deliberately an explicit allow-list of the
+# RFC1918 / ULA / link-local ranges rather than ipaddress.is_private, which also
+# marks documentation, benchmark and carrier-grade-NAT blocks (e.g. 203.0.113.0/24,
+# 198.18.0.0/15, 100.64.0.0/10) as "private" — those are egress, not the LAN.
+_LOCAL_NETS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),   # 172.16 to 172.31 only; 172.32+ is public
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),  # IPv4 link-local
+    ipaddress.ip_network("fc00::/7"),        # IPv6 unique-local (ULA)
+    ipaddress.ip_network("fe80::/10"),       # IPv6 link-local
+]
+
+
 def _is_local(host: str) -> bool:
-    return (
-        host in ("", "127.0.0.1", "::1", "localhost")
-        or host.startswith("10.")
-        or host.startswith("192.168.")
-        or host.startswith("169.254.")
-        or host.startswith("172.")  # approx private range; refined by integrations
-    )
+    """True only for addresses on the defender's own machine or private network:
+    loopback, link-local, and RFC1918 / ULA ranges. Everything else is egress —
+    including 172.x outside 172.16/12 (so 172.32/172.64/172.217 are public) and
+    carrier-grade NAT. Uses :mod:`ipaddress`, not string prefixes, which treated
+    the whole of 172.0.0.0/8 as private; an IPv4-mapped IPv6 address is judged by
+    its embedded IPv4 address, and a hostname (unparseable) is treated as egress."""
+    h = (host or "").strip()
+    if h in ("", "localhost"):
+        return True
+    if h.startswith("[") and h.endswith("]"):
+        h = h[1:-1]
+    h = h.split("%", 1)[0]  # drop any IPv6 zone identifier
+    try:
+        ip = ipaddress.ip_address(h)
+    except ValueError:
+        return False
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped  # judge ::ffff:192.168.x.y by its embedded IPv4 address
+    if ip.is_loopback:
+        return True
+    return any(ip.version == net.version and ip in net for net in _LOCAL_NETS)
 
 
 class Detector:
@@ -196,7 +278,9 @@ class Detector:
         try:
             for c in psutil.net_connections(kind="inet"):
                 if c.pid and c.raddr:
-                    conns_by_pid.setdefault(c.pid, []).append(f"{c.raddr.ip}:{c.raddr.port}")
+                    ip = c.raddr.ip
+                    hostport = f"[{ip}]:{c.raddr.port}" if ":" in ip else f"{ip}:{c.raddr.port}"
+                    conns_by_pid.setdefault(c.pid, []).append(hostport)
         except Exception:
             pass
         for p in psutil.process_iter(["pid", "name", "exe", "cmdline", "username", "create_time"]):
@@ -225,12 +309,11 @@ class Detector:
     ) -> list[DetectedAgent]:
         sanctioned_pids = sanctioned_pids or {}
         decoy_pids = decoy_pids or set()
-        own_pid = os.getpid()
+        own_pid = _own_pid()
         file_rule = enabled(self.settings.alignment, "file_access")
         results: list[DetectedAgent] = []
         for proc in self.snapshot_processes():
-            cmd_l = proc.cmd.lower()
-            if proc.pid == own_pid or "agent_guard" in cmd_l or "agent-guard" in cmd_l:
+            if proc.pid == own_pid:
                 continue  # never flag Agent Guard itself
             if not looks_like_agent(proc, self.settings):
                 continue
@@ -250,5 +333,5 @@ class Detector:
             label = proc.name or (proc.cmdline[0] if proc.cmdline else f"pid {proc.pid}")
             results.append(DetectedAgent(proc.pid, label, proc, sanc, score, reasons, state, agent_id))
             for h in proc.remote_hosts:
-                self._seen_hosts.add(h.rsplit(":", 1)[0])
+                self._seen_hosts.add(host_of(h))
         return results
