@@ -30,7 +30,8 @@ import hmac
 import json
 import secrets
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 try:  # strong classical signatures — present wherever `cryptography` is installed
@@ -252,6 +253,52 @@ def verifier_from_public(public_ref: str, public_bytes: bytes) -> Signer:
     return HMACSigner(public_bytes)  # symmetric: 'public' material is the key digest; verify-only is notional
 
 
+# ------------------------------------------------------------------ key persistence
+def _der(priv) -> str:
+    from cryptography.hazmat.primitives import serialization
+
+    raw = priv.private_bytes(
+        serialization.Encoding.DER, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    )
+    return base64.b64encode(raw).decode()
+
+
+def serialize_signer(signer: Signer) -> dict:
+    """Serialize a signing authority — *including its private half* — to a dict.
+
+    The circle's keypair must survive a restart or every credential and audit
+    signature from the previous run would become unverifiable (AG-A03). The
+    result is written to an owner-only keystore by the caller."""
+    if isinstance(signer, HMACSigner):
+        return {"scheme": "hmac", "key": base64.b64encode(signer._key).decode()}
+    if isinstance(signer, Ed25519Signer):
+        if signer._priv is None:
+            raise SignatureError("cannot persist a verify-only handle")
+        return {"scheme": "ed25519", "der": _der(signer._priv)}
+    if isinstance(signer, HybridSigner):
+        if not signer.can_sign():
+            raise SignatureError("cannot persist a verify-only handle")
+        return {"scheme": "hybrid", "mldsa": _der(signer._mldsa_priv), "ed25519": _der(signer._ed_priv)}
+    raise SignatureError("cannot serialize this signer type")
+
+
+def deserialize_signer(data: dict) -> Signer:
+    """Rebuild a signing authority from :func:`serialize_signer` output."""
+    from cryptography.hazmat.primitives import serialization
+
+    scheme = data.get("scheme")
+    if scheme == "hmac":
+        return HMACSigner(base64.b64decode(data["key"]))
+    if scheme == "ed25519":
+        priv = serialization.load_der_private_key(base64.b64decode(data["der"]), password=None)
+        return Ed25519Signer(priv, priv.public_key())
+    if scheme == "hybrid":
+        mp = serialization.load_der_private_key(base64.b64decode(data["mldsa"]), password=None)
+        ep = serialization.load_der_private_key(base64.b64decode(data["ed25519"]), password=None)
+        return HybridSigner(mp, mp.public_key(), ep, ep.public_key())
+    raise SignatureError(f"unknown signer scheme {scheme!r}")
+
+
 # ----------------------------------------------------------------------- audit log
 @dataclass
 class AuditEntry:
@@ -274,9 +321,43 @@ class AuditLog:
 
     GENESIS = "0" * 64
 
-    def __init__(self, signer: Signer | None = None) -> None:
+    def __init__(self, signer: Signer | None = None, path: Path | None = None) -> None:
         self._entries: list[AuditEntry] = []
         self._signer = signer
+        # When a path is given the chain is durable: it is loaded on construction
+        # and rewritten after every append, so the tamper-evident log survives a
+        # restart (AG-A03). With no path the log is in-memory (the default used by
+        # unit tests and transient callers).
+        self._path = path
+        if path is not None:
+            self._load()
+
+    def _load(self) -> None:
+        try:
+            raw = json.loads(self._path.read_text("utf-8"))
+        except (OSError, ValueError):
+            return
+        if not isinstance(raw, list):
+            return
+        restored: list[AuditEntry] = []
+        for e in raw:
+            try:
+                restored.append(
+                    AuditEntry(e["seq"], e["ts"], e["event"], e["data"], e["prev_hash"], e["this_hash"])
+                )
+            except (KeyError, TypeError):
+                return  # a corrupt log is discarded rather than crashing startup
+        self._entries = restored
+
+    def _save(self) -> None:
+        if self._path is None:
+            return
+        try:
+            tmp = self._path.with_suffix(".tmp")
+            tmp.write_text(json.dumps([asdict(e) for e in self._entries]), "utf-8")
+            tmp.replace(self._path)
+        except OSError:
+            pass
 
     def _digest(self, seq: int, ts: float, event: str, data: dict, prev_hash: str) -> str:
         payload = json.dumps(
@@ -292,6 +373,7 @@ class AuditLog:
         data = data or {}
         entry = AuditEntry(seq, ts, event, data, prev, self._digest(seq, ts, event, data, prev))
         self._entries.append(entry)
+        self._save()
         return entry
 
     def verify(self) -> tuple[bool, int]:

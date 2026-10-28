@@ -56,9 +56,9 @@ def test_added_file_is_listed_with_its_metadata(vault, sample):
 
 
 def test_list_shows_the_newest_item_first(vault, sample):
-    older = vault.add(str(sample), "agent", "older")
+    older = vault.add(str(sample), "agent", "older", remove_original=False)
     time.sleep(0.02)  # comfortably above the clock resolution on every platform
-    newer = vault.add(str(sample), "agent", "newer")
+    newer = vault.add(str(sample), "agent", "newer", remove_original=False)
 
     assert [i.item_id for i in vault.list()] == [newer.item_id, older.item_id]
 
@@ -102,8 +102,8 @@ def test_stored_blob_is_encrypted(vault, sample):
 
 
 def test_every_item_gets_a_fresh_nonce(vault, sample):
-    first = vault.add(str(sample), "agent", "once")
-    second = vault.add(str(sample), "agent", "twice")
+    first = vault.add(str(sample), "agent", "once", remove_original=False)
+    second = vault.add(str(sample), "agent", "twice", remove_original=False)
 
     assert first.item_id != second.item_id
     assert blob_path(vault, first).read_bytes() != blob_path(vault, second).read_bytes()
@@ -176,11 +176,15 @@ def test_store_persists_across_instances(vault, sample, restore_dir):
     assert (restore_dir / sample.name).read_bytes() == PAYLOAD
 
 
-def test_original_is_kept_unless_removal_is_requested(vault, sample):
-    vault.add(str(sample), "agent", "kept")
-    assert sample.exists()
+def test_quarantine_moves_the_original_by_default(vault, sample):
+    # By default add() MOVES the file out of its old location so it can't run
+    # from there; an opt-in copy leaves the original in place (AG-A07).
+    kept = sample.parent / "kept.py"
+    kept.write_bytes(PAYLOAD)
+    vault.add(str(kept), "agent", "copied", remove_original=False)
+    assert kept.exists()
 
-    vault.add(str(sample), "agent", "moved", remove_original=True)
+    vault.add(str(sample), "agent", "moved")
     assert not sample.exists()
 
 

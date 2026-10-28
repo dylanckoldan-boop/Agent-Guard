@@ -166,7 +166,10 @@ def test_quarantine_rung_stores_the_binary_in_the_encrypted_vault(registry, sign
     assert "encrypted quarantine" in results[-1].detail
     [item] = vault.list()
     assert (item.agent_id, item.original_path) == ("q-agent", str(binary))
-    assert binary.exists()  # suspend-and-preserve: nothing is destroyed
+    # preserve-by-moving: the binary is taken out of its runnable location (AG-A07)
+    # but kept intact and restorable in the encrypted vault — not destroyed.
+    assert not binary.exists()
+    assert vault.restore(item.item_id, str(tmp_path / "recovered.py"))
 
 
 def test_quarantine_rung_degrades_gracefully(response):

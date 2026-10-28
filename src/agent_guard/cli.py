@@ -107,6 +107,12 @@ def cmd_quarantine(g: AgentGuard, args) -> int:
             print(f"{len(items)} item(s) in quarantine.")
         return 0
     if args.q_cmd == "restore":
+        if not args.id:
+            print("error: quarantine restore requires an item id", file=sys.stderr)
+            return 2
+        if not args.to:
+            print("error: quarantine restore requires a destination: --to <path>", file=sys.stderr)
+            return 2
         dest = g.quarantine.restore(args.id, args.to)
         print(f"Restored to {dest}")
         return 0

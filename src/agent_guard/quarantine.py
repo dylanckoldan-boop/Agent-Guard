@@ -85,15 +85,25 @@ class Quarantine:
         tmp.replace(self._meta)
 
     # -- operations ---------------------------------------------------------
-    def add(self, path: str, agent_id: str, reason: str, remove_original: bool = False) -> QuarantineItem:
-        """Encrypt and store the file at ``path``. Optionally remove the original
-        so it cannot run from its old location."""
+    # A quarantined artifact is normally an executable or script; cap what we will
+    # read into memory so a hostile or mistaken path (a huge/sparse/device-backed
+    # file) can't exhaust memory.
+    MAX_BYTES = 512 * 1024 * 1024
+
+    def add(self, path: str, agent_id: str, reason: str, remove_original: bool = True) -> QuarantineItem:
+        """Encrypt and store the file at ``path``, then **move** it out of its old
+        location by default so it can no longer run from there (AG-A07). Pass
+        ``remove_original=False`` to copy instead of move."""
         src = Path(path)
+        size = src.stat().st_size  # raises FileNotFoundError before any state changes
+        if size > self.MAX_BYTES:
+            raise ValueError(f"refusing to quarantine {size} bytes (cap {self.MAX_BYTES})")
         data = src.read_bytes()
         digest = hashlib.sha256(data).hexdigest()
         item_id = secrets.token_hex(8)
-        blob = self._encrypt(data)
-        (self._root / f"{item_id}.bin").write_bytes(blob)
+        blob = self._encrypt(data, item_id)
+        with open(self._root / f"{item_id}.bin", "xb") as fh:  # exclusive: never clobber an item
+            fh.write(blob)
         item = QuarantineItem(item_id, str(src), digest, len(data), reason, agent_id, time.time())
         self._items[item_id] = item
         self._save_index()
@@ -101,22 +111,24 @@ class Quarantine:
             try:
                 src.unlink()
             except OSError:
-                pass
+                pass  # best effort: the encrypted copy is already safely stored
         return item
 
     def restore(self, item_id: str, to: str) -> str:
         """Decrypt an item to ``to``; verifies integrity against the stored hash."""
         item = self._items[item_id]
         blob = (self._root / f"{item_id}.bin").read_bytes()
-        data = self._decrypt(blob)
+        data = self._decrypt(blob, item_id)
         if hashlib.sha256(data).hexdigest() != item.sha256:
             raise ValueError("integrity check failed: quarantined item was altered")
         dest = Path(to)
         if dest.is_dir():
             dest = dest / Path(item.original_path).name
-        if dest.exists():
-            raise FileExistsError(f"{dest} already exists")
-        dest.write_bytes(data)
+        try:
+            with open(dest, "xb") as fh:  # exclusive create: never overwrite an existing file
+                fh.write(data)
+        except FileExistsError:
+            raise FileExistsError(f"{dest} already exists") from None
         return str(dest)
 
     def list(self) -> list[QuarantineItem]:
@@ -126,14 +138,19 @@ class Quarantine:
         return len(self._items)
 
     # -- crypto -------------------------------------------------------------
-    def _encrypt(self, data: bytes) -> bytes:
+    def _aad(self, item_id: str) -> bytes:
+        # Bind each ciphertext to its own item id, so a blob can't be swapped for
+        # another item's (the AAD would no longer authenticate).
+        return f"agent-guard-quarantine/1:{item_id}".encode()
+
+    def _encrypt(self, data: bytes, item_id: str) -> bytes:
         if not _HAVE_AEAD:
             raise RuntimeError("quarantine needs the `cryptography` package for AES-GCM")
         nonce = secrets.token_bytes(12)
-        return nonce + AESGCM(self._key).encrypt(nonce, data, b"agent-guard-quarantine/1")
+        return nonce + AESGCM(self._key).encrypt(nonce, data, self._aad(item_id))
 
-    def _decrypt(self, blob: bytes) -> bytes:
+    def _decrypt(self, blob: bytes, item_id: str) -> bytes:
         if not _HAVE_AEAD:
             raise RuntimeError("quarantine needs the `cryptography` package for AES-GCM")
         nonce, ct = blob[:12], blob[12:]
-        return AESGCM(self._key).decrypt(nonce, ct, b"agent-guard-quarantine/1")
+        return AESGCM(self._key).decrypt(nonce, ct, self._aad(item_id))
