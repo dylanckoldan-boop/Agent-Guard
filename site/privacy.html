@@ -6,6 +6,8 @@
 <title>Privacy — Agent Guard</title>
 <meta name="description" content="Agent Guard runs on your machine with no telemetry, no account and no cloud. This website collects nothing.">
 <meta name="color-scheme" content="dark light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <link rel="icon" href="favicon.svg">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -26,13 +28,13 @@
 </header>
 
 <main id="main">
-  <div class="wrap" style="max-width:48rem">
-    <section style="border-top:none">
+  <div class="wrap narrow">
+    <section class="no-top">
       <p class="eyebrow">Privacy policy</p>
-      <h1 style="font-size:2rem;margin:.2rem 0 1rem">Nothing about you leaves your machine</h1>
+      <h1 class="page-title">Nothing about you leaves your machine</h1>
       <p class="lead">Agent Guard is a local tool and this is a static website. Neither collects anything about you. This page says so plainly.</p>
 
-      <h2 style="margin-top:2rem">The application</h2>
+      <h2 class="mt-xl">The application</h2>
       <ul class="ticks">
         <li><strong>No telemetry.</strong> Agent Guard does not send usage data, crash reports or anything else to us or to any third party. It has no analytics.</li>
         <li><strong>No account, no cloud.</strong> There is nothing to sign in to. Your agents, detections and settings never leave your computer.</li>
@@ -41,17 +43,17 @@
         <li><strong>Open source.</strong> Agent Guard is MIT licensed, so you can read exactly what it does and verify these claims for yourself.</li>
       </ul>
 
-      <h2 style="margin-top:2rem">This website</h2>
+      <h2 class="mt-xl">This website</h2>
       <ul class="ticks">
         <li><strong>No JavaScript, no cookies.</strong> The site is plain HTML and CSS. It sets no cookies and runs no scripts.</li>
         <li><strong>No third-party requests.</strong> Fonts are your system's own and nothing is loaded from other servers, so no outside party sees your visit.</li>
         <li><strong>No analytics or tracking.</strong> We do not log, profile or measure visitors. The only record of your visit is whatever your hosting provider keeps in standard server logs (the site is published with GitHub Pages).</li>
       </ul>
 
-      <h2 style="margin-top:2rem">Contact</h2>
+      <h2 class="mt-xl">Contact</h2>
       <p class="lead">Questions, or a security concern? Open an issue or use private vulnerability reporting on the <a href="https://github.com/dylanckoldan-boop/Agent-Guard">project repository</a>.</p>
 
-      <p style="color:var(--muted);font-size:.9rem;margin-top:2rem">This policy is dated 26 October 2026. If its meaning ever changes, this date changes with it.</p>
+      <p class="fineprint mt-xl">This policy is dated 26 October 2026. If its meaning ever changes, this date changes with it.</p>
       <p><a href="index.html">← Back to the home page</a></p>
     </section>
   </div>

@@ -6,6 +6,8 @@
 <title>Agent Guard — a containment net for autonomous AI agents</title>
 <meta name="description" content="Agent Guard holds an oversight net across your AI agents, catches rogue agent activity, and pacifies it reversibly within your own perimeter. Open source, runs on your machine, no telemetry.">
 <meta name="color-scheme" content="dark light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <link rel="icon" href="favicon.svg">
 <meta property="og:title" content="Agent Guard">
 <meta property="og:description" content="A containment net for autonomous AI agents — detect rogue agent activity and pacify it, reversibly, within your own perimeter.">
@@ -33,7 +35,7 @@
 
 <main id="main">
   <div class="wrap">
-    <section class="hero" style="border-top:none">
+    <section class="hero no-top">
       <div>
         <p class="eyebrow">Open source · runs on your machine</p>
         <h1>A containment net for autonomous AI agents</h1>
@@ -71,7 +73,7 @@
     <section id="how">
       <h2>One net, two threats</h2>
       <p class="lead">An AI agent with tools and network access can go wrong two ways. Agent Guard is built to catch both with one apparatus — by not trusting the model to hold a boundary, and constraining what it can reach.</p>
-      <div class="two" style="margin-top:1.25rem">
+      <div class="two mt-md">
         <div class="panel">
           <h3>The misaligned agent</h3>
           <p class="lead">Sanctioned, valid credentials, but its objective is wrong at the edges — it treats a safety-critical or off-limits action as just another lever. An alignment failure at the machine boundary.</p>
@@ -92,7 +94,7 @@
         <div class="card"><div class="n">Layer 3</div><h3>Pacify ladder</h3><p>Throttle → quarantine → revoke → suspend → terminate, climbing only as far as the threat demands, all inside your own perimeter.</p></div>
         <div class="card"><div class="n">Layer 4</div><h3>Consensus + audit</h3><p>A flag contains only on a signed quorum; every step lands in a hash-chained, post-quantum-signed, tamper-evident log.</p></div>
       </div>
-      <p style="margin-top:1.5rem"><a href="https://github.com/dylanckoldan-boop/Agent-Guard/blob/main/docs/ARCHITECTURE.md">Read the full architecture →</a></p>
+      <p class="mt-lg"><a href="https://github.com/dylanckoldan-boop/Agent-Guard/blob/main/docs/ARCHITECTURE.md">Read the full architecture →</a></p>
     </section>
 
     <section id="sentinel">
@@ -105,7 +107,7 @@
         </div>
         <div class="panel">
           <p class="pill">optional · never a dependency</p>
-          <ul class="ticks" style="margin-top:1rem">
+          <ul class="ticks mt-sm">
             <li>Scan an agent's binary for a verdict</li>
             <li>Block its egress at the system firewall</li>
             <li>Move the binary into an encrypted vault with rollback</li>

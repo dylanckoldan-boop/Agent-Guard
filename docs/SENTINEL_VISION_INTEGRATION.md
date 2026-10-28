@@ -46,10 +46,12 @@ checks their ACLs before loading. Install from an administrator terminal, with a
 Python matching the app (3.12):
 
 ```
-py -3.12 -m pip install --target "C:\Program Files\Sentinel Vision\plugins\agent-guard" agent-guard
+py -3.12 -m pip install --target "C:\Program Files\Sentinel Vision\plugins\agent-guard" "git+https://github.com/dylanckoldan-boop/Agent-Guard"
 ```
 
-This installs Agent Guard's core and its dependencies the app doesn't already
+Install from the repository, not from PyPI: the name `agent-guard` on PyPI is an
+unrelated project and is not this software. This installs Agent Guard's core and
+its dependencies the app doesn't already
 bundle (PySide6 comes from sentinel-vision itself). sentinel-vision asks for a
 one-time approval before loading a new or changed plugin. For pip/source installs
 on any platform, the entry point is discovered normally with no extra step.
