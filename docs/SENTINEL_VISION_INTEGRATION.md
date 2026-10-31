@@ -65,7 +65,10 @@ The pacify ladder's quarantine rung, when sentinel-vision is present, calls:
 sentinel-vision-cli quarantine add PATH --reason "<text>"
 ```
 
-In 0.4.1 sentinel-vision **moves** the file (encrypts it into the vault like an
+When the agent runs under an interpreter (`python agent.py`, `node agent.js`),
+Agent Guard passes the **script**, never the shared interpreter, so containment
+can't neutralise every Python or Node process on the machine. In 0.4.1
+sentinel-vision **moves** the file (encrypts it into the vault like an
 automatic detection and deletes the original), prints only the new item id and
 exits 0; on any problem it exits 2 and nothing changes. It refuses non-regular
 files, operating-system files and sentinel-vision's own files. `--source` defaults
@@ -95,9 +98,12 @@ importable, else the CLI).
 
 ## 4. Blocking egress
 
-The ladder's "cut egress" rung, when sentinel-vision is present, calls
+`Containment.block_egress(host)`, when sentinel-vision is present, calls
 `sentinel-vision-cli net block IP`, which adds inbound/outbound rules to the system
-firewall (public addresses only; needs admin/root).
+firewall (public addresses only; needs admin/root). This is a containment **hook**,
+available for a future automatic "cut egress" rung — the pacify ladder
+(throttle → quarantine → revoke → suspend → terminate) does not climb to it on its
+own yet.
 
 ## Graceful degradation
 

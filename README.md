@@ -23,10 +23,10 @@ Defense in depth — defeating any one layer still leaves the next.
 
 | Layer | Name | Role |
 |------:|------|------|
-| 1 | **Admission** | Nothing runs unattested; agents carry signed, least-privilege identity. |
-| 2 | **The net (tripwire)** | No legitimate agent touches a decoy, so any contact *is* an intrusion — ~zero false positives. |
+| 1 | **Admission** | Agents you sanction carry signed, least-privilege identity, checked against the revocation registry; an unregistered agent is flagged, not blocked. |
+| 2 | **The net (tripwire)** | No legitimate workflow opens a planted decoy, so contact *is* an intrusion — a near-zero-false-positive signal (only the bait trips the wire). |
 | 3 | **Pacify ladder** | throttle → quarantine → revoke → suspend → terminate, all inside your own perimeter. |
-| 4 | **Consensus + audit** | A flag contains only on a signed quorum; every step is logged in a hash-chained, PQ-signed, tamper-evident chain. |
+| 4 | **Consensus + audit** | A flag contains only after an in-process quorum agrees (a decoy touch is self-authorizing); every step is logged in a hash-chained, tamper-evident chain whose head can be PQ-signed. |
 
 ## Install
 
@@ -79,11 +79,13 @@ Mix networks shuffle entrances and exits so a watcher can't link them. Agent Gua
 
 Authentication proves *who* is talking; mixing hides *that* they are, and to whom. Time-critical containment commands skip the mix, because the kill switch must be fast.
 
+Today the mix channel is a **design prototype**: it produces fixed-size, indistinguishable cover records from system randomness, but is not yet wired to a live network transport, and the consensus quorum runs within a single process. The "decoy actions" glamour is likewise a design, not yet implemented. These are called out so the design intent isn't read as a shipped guarantee.
+
 ## Standalone, and Route B
 
 Agent Guard runs entirely on its own. When the partners are installed, it opens a port:
 
-- **sentinel-vision** lends its *hands* — `scan` an agent's binary for a verdict, `block_egress` at the OS firewall, hand the binary to its hardened vault with rollback (the file is moved, not copied), and mirror every containment into its protected, append-only plugin log that even a program running as you cannot erase (the real Layer-4 Wall). Under Route B — implemented in **sentinel-vision 0.4.1** — Agent Guard's pages appear as a tab *inside* sentinel-vision, with no dependency either way.
+- **sentinel-vision** lends its *hands*, each reached through the adapter when it is installed — `scan` an agent's binary for a malware verdict, `block_egress` at the OS firewall, hand the binary to its hardened vault with rollback (the file is moved, not copied), and mirror every containment into its append-only plugin log, which on Windows its protection service keeps so even a program running as you cannot change or delete it. (On macOS and Linux that log is an ordinary user file until the service exists.) Under Route B — implemented in **sentinel-vision 0.4.1** — Agent Guard's pages appear as a tab *inside* sentinel-vision, with no dependency either way.
 - **cryptomigrate** is the *notary and crypto lens* — scan a flagged agent's directory for weak crypto, and emit PQ-signed attestations of oversight state.
 
 How Agent Guard plugs into sentinel-vision (the entry point, the `quarantine add` / `plugin-log` / `net block` verbs, and the Windows plugin install) is in [`docs/SENTINEL_VISION_INTEGRATION.md`](docs/SENTINEL_VISION_INTEGRATION.md).
@@ -105,8 +107,8 @@ pytest -q
 
 ## Standards basis
 
-- **Post-quantum:** FIPS 203 (ML-KEM), FIPS 204 (ML-DSA), NIST IR 8547 (draft transition).
-- **AI in operational settings:** the governing rule that humans remain responsible and must be able to bypass, replace, and plan for the failure of the AI.
+- **Signatures:** [FIPS 204](https://csrc.nist.gov/pubs/fips/204/final) (ML-DSA-65) paired with Ed25519 ([RFC 8032](https://www.rfc-editor.org/rfc/rfc8032), [FIPS 186-5](https://csrc.nist.gov/pubs/fips/186-5/final)); quarantine at rest uses AES-256-GCM ([NIST SP 800-38D](https://csrc.nist.gov/pubs/sp/800/38/d/final)). ML-KEM (FIPS 203) is **not** used — Agent Guard signs, it does not do key exchange. Post-quantum transition is tracked as background by [NIST IR 8547](https://csrc.nist.gov/pubs/ir/8547/ipd).
+- **AI in operational settings:** the principle that a human stays responsible and must be able to bypass, replace, and plan for the failure of the AI.
 - Companion projects: [sentinel-vision](https://github.com/dylanckoldan-boop/sentinel-vision) (antimalware; hybrid ML-DSA-65 + Ed25519 signed updates) and [cryptomigrate](https://github.com/dylanckoldan-boop/Cryptomigrate) (crypto discovery, migration, and signed attestation).
 
 ## Scope and limitations
@@ -115,7 +117,9 @@ A research concept and a working v0.1, not a certified safety system. The decept
 
 ## How this was built
 
-The author designed the architecture, the four-layer model, the many-doors principle, and the module structure, and built the implementation with AI assistance (Anthropic's Claude) under that direction. Correctness is established by the test suite and the explicit invariants above, not by assertion — mirroring the companion [cryptomigrate](https://github.com/dylanckoldan-boop/Cryptomigrate) and [machineward](https://github.com/dylanckoldan-boop/machineward) projects.
+The author designed the architecture, the four-layer model, the many-doors principle, and the module structure, and built the implementation with AI assistance (Anthropic's Claude) under that direction. Every change is run through the automated test suite, and the maintainer is responsible for all of it. Correctness is established by the test suite and the explicit invariants above, not by assertion — mirroring the companion [cryptomigrate](https://github.com/dylanckoldan-boop/Cryptomigrate) and [machineward](https://github.com/dylanckoldan-boop/machineward) projects. Agent Guard itself contains no AI model and sends nothing to any AI service.
+
+Anthropic, Claude, OpenAI, LangChain, CrewAI and other product names are trademarks of their owners. They are named only to describe compatibility or what Agent Guard can detect; this project is not affiliated with or endorsed by them.
 
 ## License
 
