@@ -1,9 +1,7 @@
 """Optional integration adapters — detected at runtime, never a dependency.
 
-The partners (``sentinel-vision``, ``cryptomigrate``) appear nowhere in Agent
-Guard's package metadata — not as a dependency, not as an optional extra. The
-only thing that knows about them is a guarded import / CLI probe here. Agent
-Guard is fully functional with neither installed; each one, when present, is a
+The partners (``sentinel-vision``, ``cryptomigrate``) appear nowhere in Foldward's package metadata — not as a dependency, not as an optional extra. The
+only thing that knows about them is a guarded import / CLI probe here. Foldward is fully functional with neither installed; each one, when present, is a
 pure upgrade (see ``docs/ARCHITECTURE.md``, Route B).
 """
 

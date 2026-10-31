@@ -17,8 +17,7 @@ What Foldward gains when the port is open:
 * **quarantine_binary(...)** — hands the neutralized binary to SV's AES-256-GCM
   vault with rollback (Route B ``quarantine add`` verb), making SV the
   system-of-record for contained artifacts.
-* **protected_store_dir()** — SV's admin-only service directory, where Agent
-  Guard can keep its audit + registry so a compromised agent cannot erase its own
+* **protected_store_dir()** — SV's admin-only service directory, where Foldward can keep its audit + registry so a compromised agent cannot erase its own
   containment record. This is the real Layer-4 Wall.
 
 Everything is wrapped so a missing or older sentinel-vision degrades to None /
@@ -37,7 +36,8 @@ from foldward.quarantine import Quarantine
 from foldward.response import Containment
 
 _CLI = "sentinel-vision-cli"
-_PLUGIN_NAME = "agent-guard"  # the name sentinel-vision files Foldward's records under
+_PLUGIN_NAME = "foldward"  # the name sentinel-vision files Foldward's records under
+_LEGACY_PLUGIN_NAME = "agent-guard"  # the pre-rename name; still read & verified so old records aren't orphaned
 
 
 def _canonical_dirs() -> list[str]:
@@ -129,13 +129,9 @@ class SentinelVisionAdapter:
 
     # -- firewall -----------------------------------------------------------
     def block_ip(self, ip: str) -> str:
-        if self._mod is not None:
-            try:
-                from sentinel_vision.network.firewall import block_ip  # type: ignore
-
-                return block_ip(ip)
-            except Exception as exc:
-                return f"firewall block failed: {exc}"
+        # Use the supported CLI route only. Sentinel Vision's in-process
+        # `network.firewall.block_ip` is an internal, not part of its documented
+        # plugin interface, so Foldward does not call it directly.
         if self._cli:
             try:
                 out = subprocess.run([self._cli, "net", "block", ip], capture_output=True, text=True, timeout=30)
@@ -196,18 +192,33 @@ class SentinelVisionAdapter:
         return "no sentinel-vision plugin-log surface available"
 
     def plugin_log_verify(self) -> dict:
-        """Ask sentinel-vision whether Foldward's protected log chain is intact."""
-        if self._cli:
-            try:
-                out = subprocess.run(
-                    [self._cli, "plugin-log", "verify", _PLUGIN_NAME],
-                    capture_output=True, text=True, timeout=30,
-                )
-                if out.returncode == 0:
-                    return json.loads(out.stdout or "{}")
-            except Exception:
-                pass
-        return {"intact": None, "detail": "no sentinel-vision plugin-log surface available"}
+        """Ask sentinel-vision whether Foldward's protected log chain is intact.
+
+        Verifies both the current ``foldward`` log and the pre-rename
+        ``agent-guard`` log, so records written before the rename are still
+        checked. A present-but-broken chain (SV exits 1 with ``intact: false``) is
+        reported as broken, not as a missing surface. The combined ``intact`` is
+        True only if every log that exists is intact, False if any is broken, and
+        None when there is no surface to ask."""
+        if not self._cli:
+            return {"intact": None, "detail": "no sentinel-vision plugin-log surface available"}
+        logs = {name: self._verify_one(name) for name in (_PLUGIN_NAME, _LEGACY_PLUGIN_NAME)}
+        known = [v["intact"] for v in logs.values() if v["intact"] is not None]
+        intact = all(known) if known else None
+        detail = "; ".join(f"{name}: {v['detail']}" for name, v in logs.items())
+        return {"intact": intact, "detail": detail, "logs": logs}
+
+    def _verify_one(self, name: str) -> dict:
+        try:
+            out = subprocess.run(
+                [self._cli, "plugin-log", "verify", name], capture_output=True, text=True, timeout=30
+            )
+            if out.returncode in (0, 1):  # 0 = intact, 1 = broken — both are answers, per SV's contract
+                data = json.loads(out.stdout or "{}")
+                return {"intact": bool(data.get("intact", out.returncode == 0)), "detail": data.get("detail", "")}
+            return {"intact": None, "detail": f"verify error (exit {out.returncode})"}
+        except Exception as exc:
+            return {"intact": None, "detail": f"verify unavailable: {exc}"}
 
 
 def make_containment(quarantine: Quarantine | None) -> Containment:
