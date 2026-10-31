@@ -76,10 +76,10 @@ def _quarantine_target(proc) -> str | None:
     exe = getattr(proc, "exe", None) or ""
     cmdline = list(getattr(proc, "cmdline", None) or [])
     if _is_interpreter(exe) or (not exe and cmdline and _is_interpreter(cmdline[0])):
-        script = _script_from_cmdline(cmdline)
-        if script:
-            return script
-        return exe or None  # a `-m module` run: nothing on disk to isolate
+        # The script the interpreter runs, or None for a `-m module` run — NEVER
+        # the interpreter itself. Quarantining the shared interpreter would take
+        # out every Python/Node process on the box (AG-A05).
+        return _script_from_cmdline(cmdline)
     return exe or None
 
 
