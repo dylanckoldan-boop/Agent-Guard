@@ -6,8 +6,7 @@ lens, not a containment mechanism. When present it adds two things:
 * **crypto_scan(dir)** — run Cryptomigrate's discovery over a flagged agent's
   install directory to surface a genuinely new risk dimension: an agent that
   ships hardcoded keys, DES/SHA-1, or phones home over obsolete TLS.
-* **attest(state)** — emit a Cryptomigrate-format, PQ-signed attestation of Agent
-  Guard's oversight state (audit head, registry size, containment log) for
+* **attest(state)** — emit a Cryptomigrate-format, PQ-signed attestation of Foldward's oversight state (audit head, registry size, containment log) for
   auditors, reusing CM's attestation discipline.
 
 Note: Foldward's own :mod:`foldward.crypto` already produces PQ-signed,

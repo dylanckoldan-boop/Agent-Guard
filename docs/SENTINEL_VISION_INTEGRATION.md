@@ -1,7 +1,6 @@
 # Route B — integrating with sentinel-vision
 
-Route B is **implemented in sentinel-vision 0.4.1**. This page documents how Agent
-Guard plugs into it from Foldward's side; sentinel-vision's own contract is in
+Route B is **implemented in sentinel-vision 0.4.1**. This page documents how Foldward plugs into it from Foldward's side; sentinel-vision's own contract is in
 that project's [`docs/PLUGINS.md`](https://github.com/dylanckoldan-boop/sentinel-vision/blob/main/docs/PLUGINS.md).
 
 The rule in both directions: **neither project depends on the other.** Foldward
@@ -79,8 +78,7 @@ instead (`integrations/sentinel_vision.py` handles the fallback).
 ## 3. Records nothing else can erase — the real Wall
 
 This replaces the earlier idea of a "protected directory." `config.plugin_dir` is
-an ordinary user folder and is **not** used for security records. Instead, Agent
-Guard mirrors every containment into sentinel-vision's protected, append-only
+an ordinary user folder and is **not** used for security records. Instead, Foldward mirrors every containment into sentinel-vision's protected, append-only
 plugin log:
 
 ```
@@ -95,6 +93,12 @@ it reaches Foldward's own store. `core.py` appends a record — carrying the
 signed audit head — on every `pacify()`, through
 `SentinelVisionAdapter.plugin_log_append` (in-process `plugin_api.plugin_log` when
 importable, else the CLI).
+
+New records are written under the log name **`foldward`**. `plugin_log_verify`
+checks both `foldward` and the pre-rename **`agent-guard`** log, so containment
+records written before the rename are still verified and never orphaned. (The
+`agent-guard` name is retired on the sentinel-vision side as part of the same
+coordinated release; see the rename note in `docs/NAME_CLEARANCE.md`.)
 
 ## 4. Blocking egress
 

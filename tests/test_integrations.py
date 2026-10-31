@@ -243,9 +243,27 @@ def test_plugin_log_append_uses_the_cli_when_present(sv_cli):
     detail = sentinel_vision.SentinelVisionAdapter().plugin_log_append({"event": "pacify", "agent": "rogue-1"})
 
     assert "protected log" in detail
-    assert sv_cli.calls[0][:4] == ["/opt/sv/sentinel-vision-cli", "plugin-log", "append", "agent-guard"]
+    assert sv_cli.calls[0][:4] == ["/opt/sv/sentinel-vision-cli", "plugin-log", "append", "foldward"]
     assert sv_cli.calls[0][4] == "--json"
     assert json.loads(sv_cli.calls[0][5]) == {"event": "pacify", "agent": "rogue-1"}
+
+
+def test_plugin_log_verify_checks_both_the_current_and_legacy_logs(sv_cli):
+    sv_cli.stdout = '{"intact": true}'
+
+    result = sentinel_vision.SentinelVisionAdapter().plugin_log_verify()
+
+    verified = [c[3] for c in sv_cli.calls if c[1:3] == ["plugin-log", "verify"]]
+    assert verified == ["foldward", "agent-guard"]  # the new name, then the pre-rename log
+    assert result["intact"] is True
+
+
+def test_plugin_log_verify_reports_a_broken_chain_not_a_missing_surface(sv_cli):
+    sv_cli.returncode, sv_cli.stdout = 1, '{"intact": false}'  # SV exits 1 for a broken chain
+
+    result = sentinel_vision.SentinelVisionAdapter().plugin_log_verify()
+
+    assert result["intact"] is False
 
 
 def test_pacify_mirrors_a_record_to_the_protected_log_when_present(guard):
