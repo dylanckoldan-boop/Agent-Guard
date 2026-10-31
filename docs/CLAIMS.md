@@ -29,7 +29,7 @@ Paths are relative to the repository root. "Test" names a file in `tests/`.
 | sentinel-vision's CLI is resolved only from canonical install dirs, never `$PATH`. | `integrations/sentinel_vision.py` (`_resolve_cli`) | `test_audit_regressions.py::test_sentinel_vision_cli_is_not_taken_from_path`, `test_integrations.py` |
 | Foldward runs with no partners installed; everything degrades to its own mechanisms, never an error. | `integrations/` (`partner_status`, `make_containment`) | `test_integrations.py` |
 | The website sets a CSP + referrer policy and uses no inline styles; light-mode link contrast meets WCAG AA; install commands fetch from the repo, not the unrelated PyPI package. | `site/*.html`, `site/style.css`, `README.md`, `docs/*.md` | `test_audit_regressions.py::test_site_pages_have_a_content_security_policy_and_no_inline_styles`, `::test_light_mode_link_contrast_is_at_least_4_5`, `::test_install_commands_never_fetch_the_unrelated_pypi_package` |
-| Foldward contains no AI model and opens no network connection from its own source. | `src/foldward/` (no `socket`/`urllib`/`http`/`requests` imports) | Verified by inspection; see the privacy page. (A guard test is a good future add.) |
+| Foldward contains no AI model. Its core — detection, scoring, containment, the audit — opens no network connection and sends no telemetry. The *only* network use anywhere is the opt-in update check, which you trigger explicitly. | core modules in `src/foldward/` (no network imports); network isolated to `src/foldward/update.py` | `test_update.py` (the check is explicit, injectable and degrades gracefully); core verified by inspection |
 
 ## Planned / design prototype — do not read as shipped
 

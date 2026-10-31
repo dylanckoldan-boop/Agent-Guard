@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout
+from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QPushButton
 
+from foldward import __version__
 from foldward.gui import theme
 from foldward.gui.pages.base import Page
 from foldward.gui.widgets import card, label
@@ -40,7 +41,7 @@ class SettingsPage(Page):
         row.addWidget(left, 1)
 
         right, rl = card()
-        rl.addWidget(label("Oversight &amp; partners", obj="h2"))
+        rl.addWidget(label("Oversight & partners", obj="h2"))
         self.cb_mix = QCheckBox("Mix oversight traffic (many-doors resistance, control plane only)")
         self.cb_mix.setChecked(s.mix_oversight_traffic)
         rl.addWidget(self.cb_mix)
@@ -48,6 +49,20 @@ class SettingsPage(Page):
         rl.addWidget(self._partner("sentinel-vision", "scan · firewall · hardened vault · the Wall", p.sentinel_vision))
         rl.addWidget(self._partner("cryptomigrate", "crypto-posture scan · PQ-signed attestation", p.cryptomigrate))
         rl.addWidget(label("Both optional. Foldward runs fully standalone with neither.", obj="muted", wrap=True))
+
+        rl.addSpacing(8)
+        rl.addWidget(label("Version & updates", obj="h2"))
+        up = QHBoxLayout()
+        up.addWidget(label(f"Foldward {__version__}"))
+        self.b_update = QPushButton("Check for updates")
+        self.b_update.clicked.connect(self._check_updates)
+        up.addWidget(self.b_update)
+        up.addStretch(1)
+        rl.addLayout(up)
+        self.lbl_update = label("", wrap=True)
+        self.lbl_update.setStyleSheet(f"color:{theme.MUTED};font-size:12px;")
+        rl.addWidget(self.lbl_update)
+
         rl.addStretch(1)
         row.addWidget(right, 1)
         self.root.addLayout(row, 1)
@@ -64,6 +79,15 @@ class SettingsPage(Page):
         c.setStyleSheet(f"background:{theme.SURFACE_2};border:1px solid {theme.BORDER};border-radius:10px;padding:11px;")
         c.setWordWrap(True)
         return c
+
+    def _check_updates(self) -> None:
+        # Opt-in and explicit: contacts GitHub only when this button is clicked,
+        # and only to compare version numbers (see foldward.update).
+        self.lbl_update.setText("Checking GitHub for a newer release…")
+        self.b_update.repaint()
+        from foldward.update import check_for_update
+
+        self.lbl_update.setText(check_for_update().detail)
 
     def _save(self, *_) -> None:
         s = self.guard.settings

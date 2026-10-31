@@ -17,6 +17,7 @@ from foldward.config import Settings, data_root
 from foldward.core import Foldward
 from foldward.crypto import self_test
 from foldward.identity import Scope
+from foldward.update import check_for_update
 
 
 def _print(obj: dict, as_json: bool) -> None:
@@ -132,6 +133,19 @@ def cmd_selftest(g: Foldward, args) -> int:
     return 0 if ok else 2
 
 
+def cmd_update(g: Foldward, args) -> int:
+    st = check_for_update()
+    if args.json:
+        _print(
+            {"current": st.current, "latest": st.latest, "available": st.available,
+             "detail": st.detail, "install_command": st.install_command},
+            True,
+        )
+    else:
+        print(st.detail)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="foldward", description=f"{APP_NAME} — a containment net for AI agents")
     p.add_argument("--version", action="version", version=f"{APP_NAME} {__version__}")
@@ -174,6 +188,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("selftest", help="verify the crypto backend")
     s.set_defaults(fn=cmd_selftest)
+
+    s = sub.add_parser("update", help="check GitHub for a newer release (opt-in; sends no telemetry)")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_update)
     return p
 
 
