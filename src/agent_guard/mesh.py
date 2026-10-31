@@ -30,8 +30,8 @@ fast path for time-critical containment commands.
 
 from __future__ import annotations
 
+import json
 import random
-import time
 from dataclasses import dataclass, field
 
 
@@ -106,23 +106,61 @@ class MixChannel:
     observer cannot link a flag to the sentinel that raised it or to the agent it
     concerns. Time-critical containment commands bypass mixing (``urgent=True``).
     This never touches watched-agent traffic.
+
+    Every record on the wire is a single fixed-size, opaque frame: real and cover
+    frames are byte-for-byte the same length and nothing in a frame marks it as
+    cover, so the batch is unlinkable to an observer. The shuffle draws from the
+    operating-system CSPRNG — a seedable PRNG would let an observer reproduce the
+    order and pick the real record out of its cover (see AG-F09).
     """
+
+    FRAME = 256  # bytes per record on the wire; every frame is padded to this length
 
     def __init__(self, enabled: bool = True, min_cover: int = 3, rng: random.Random | None = None) -> None:
         self.enabled = enabled
-        self.min_cover = min_cover
+        self.min_cover = max(0, int(min_cover))
         self.stats = MixStats()
-        self._rng = rng or random.Random()
+        # random.SystemRandom() is secrets.SystemRandom(): os.urandom-backed, not
+        # the predictable Mersenne Twister. A seedable Random is never constructed.
+        self._rng = rng or random.SystemRandom()
 
-    def emit(self, record: dict, *, urgent: bool = False) -> list[dict]:
-        """Return the batch actually put on the wire (real + cover, shuffled)."""
-        real = {**record, "_cover": False, "_t": time.time()}
+    def _frame(self, body: bytes) -> bytes:
+        body = body[: self.FRAME - 2]
+        return len(body).to_bytes(2, "big") + body + bytes(self.FRAME - 2 - len(body))
+
+    @staticmethod
+    def _serialize(record: dict) -> bytes:
+        return json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+
+    def _decoy_like(self, record: dict) -> dict:
+        """A cover record with the same shape as the real one but random values,
+        so a frame's contents cannot betray whether it is real or cover."""
+        alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+        out: dict = {}
+        for key, value in record.items():
+            if isinstance(value, bool):
+                out[key] = bool(self._rng.getrandbits(1))
+            elif isinstance(value, int):
+                out[key] = self._rng.randrange(0, 101)
+            elif isinstance(value, float):
+                out[key] = float(self._rng.randrange(0, 101))
+            elif isinstance(value, str):
+                out[key] = "".join(self._rng.choice(alphabet) for _ in range(max(1, len(value))))
+            else:
+                out[key] = "".join(self._rng.choice(alphabet) for _ in range(4))
+        return out
+
+    def emit(self, record: dict, *, urgent: bool = False) -> list[bytes]:
+        """Return the batch actually put on the wire (real + cover, shuffled).
+
+        The input ``record`` is never mutated; each element is a fixed-size frame."""
+        real = self._frame(self._serialize(record))
         if not self.enabled or urgent:
             self.stats.real_emitted += 1
             return [real]
-        batch = [real]
-        for _ in range(self.min_cover):
-            batch.append({"_cover": True, "_t": time.time(), "_nonce": self._rng.getrandbits(48)})
+        batch = [real] + [
+            self._frame(self._serialize(self._decoy_like(record))) for _ in range(self.min_cover)
+        ]
         self._rng.shuffle(batch)
         self.stats.real_emitted += 1
         self.stats.cover_emitted += self.min_cover

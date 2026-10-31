@@ -36,10 +36,10 @@ Defense in depth: defeating any one layer still leaves the next.
 
 | Layer | Name | Role | Module |
 |------:|------|------|--------|
-| 1 | **Admission** | Nothing runs unattested. Agents carry signed, least-privilege identity and are continuously verified. | `identity.py` |
-| 2 | **The net (tripwire)** | No legitimate agent touches a decoy, so any contact *is* an intrusion — the one signal with ~zero false positives. | `tripwire.py`, `detect.py` |
+| 1 | **Admission** | Agents you sanction carry signed, least-privilege identity, checked against the revocation registry. An unregistered agent is flagged, not blocked. | `identity.py` |
+| 2 | **The net (tripwire)** | No legitimate workflow opens a planted decoy, so contact *is* an intrusion — a near-zero-false-positive signal, since only the bait trips the wire. | `tripwire.py`, `detect.py` |
 | 3 | **Pacify ladder** | throttle → quarantine → revoke → suspend → terminate, climbing only as far as the threat demands, all inside our own perimeter. | `response.py` |
-| 4 | **Consensus + audit** | A flag contains only after a signed quorum agrees; every step lands in a hash-chained, PQ-signed, tamper-evident log. | `mesh.py`, `crypto.py`, `registry.py` |
+| 4 | **Consensus + audit** | A flag contains only after an in-process quorum agrees (a decoy touch is self-authorizing); every step lands in a hash-chained, tamper-evident log whose head can be PQ-signed. | `mesh.py`, `crypto.py`, `registry.py` |
 
 ### Layer 1 — admission
 
@@ -58,11 +58,12 @@ Two decoy kinds, both self-authorizing on contact:
 * **Canary files** — attractive bait (`credentials.env`, `aws_keys.txt`,
   `wallet.dat`) planted where agents work. A human never opens them; an agent
   enumerating and exfiltrating files does.
-* **Decoy actions** — a high-value-looking tool advertised to agents. This is the
-  *glamour* (asymmetric legibility): to a throughput-optimizing agent the real
-  dangerous levers look inert while the decoy looks rewarding, so a misaligned
-  optimizer reaches for the decoy and trips the wire. To a human, everything is
-  labeled plainly.
+* **Decoy actions** *(planned — designed, not yet implemented)* — a
+  high-value-looking tool advertised to agents. This is the *glamour* (asymmetric
+  legibility): to a throughput-optimizing agent the real dangerous levers look
+  inert while the decoy looks rewarding, so a misaligned optimizer reaches for the
+  decoy and trips the wire. To a human, everything is labeled plainly. Only canary
+  files are wired today; the decoy-action surface is future work.
 
 Detection (`detect.py`) fuses three cheap, always-available signals into a
 per-agent risk score: **identity** (sanctioned or not), **reach** (egress,
@@ -75,7 +76,7 @@ the scoring policy is tested without any live processes.
 "Pacify" is graduated, reversible-first containment:
 
 1. **throttle** — rate-limit CPU/priority. Fully reversible.
-2. **quarantine** — copy the binary into the encrypted store; optionally cut egress.
+2. **quarantine** — move the binary (its script, when it runs under an interpreter) into the encrypted store so it can't run from where it sat. Cutting egress is a separate capability through sentinel-vision, not yet an automatic rung.
 3. **revoke** — pull the credential; propagate a signed revocation to the mesh.
 4. **suspend** — freeze the process intact (SIGSTOP). The cleanest pacification:
    preserved for forensics, released if cleared.
@@ -101,6 +102,9 @@ clear a threshold *and* enough independent sentinels must agree, so one noisy or
 compromised sentinel can neither force a containment nor veto one. The tripwire
 is special-cased: a decoy touch is self-authorizing. This both resists a single
 compromised sentinel and keeps the pacify mechanism itself from being abused.
+Today these sentinels are computed within one Agent Guard process and their votes
+are not themselves signed; distributing them across hosts with signed votes is
+future work.
 
 **Signed, DoS-resistant revocation.** A revocation is accepted only if it carries
 a valid circle signature, verified with the circle's *public* verifier. That one
@@ -139,6 +143,12 @@ they are talking and to whom — different protections, stacked. Mixing is kept 
 the fast path for time-critical containment commands (`urgent=True`), because the
 kill switch must be fast.
 
+**Status.** The mix channel is a *design prototype*. `MixChannel` emits
+fixed-size, system-random (`secrets.SystemRandom`) cover records that carry no
+"which one is real" marker, but it is not yet carried over a live network
+transport, so the unlinkability property is designed, not yet delivered. It is
+described here as intent, not as a shipped guarantee.
+
 Steganographic and mix/onion channels are exactly how real malware hides its
 command-and-control, so Agent Guard assumes a sophisticated agent will attempt a
 covert channel to phone home — and answers it the same way as the rest of the
@@ -158,8 +168,11 @@ scheme is **asymmetric by default**, so a sentinel holds only a *verify-only*
 handle: it can check a revocation or credential but can never mint one. That is
 what keeps a single compromised watcher from blinding or weaponizing the mesh.
 
-Post-quantum basis: FIPS 203 (ML-KEM), FIPS 204 (ML-DSA), NIST IR 8547 (draft
-transition). This mirrors the crypto-agility of the Cryptomigrate project.
+Signature basis: FIPS 204 (ML-DSA-65) with Ed25519 (RFC 8032 / FIPS 186-5);
+quarantine encryption is AES-256-GCM (NIST SP 800-38D). ML-KEM (FIPS 203) is
+**not** used — Agent Guard signs, it does not do key exchange. NIST IR 8547
+tracks the post-quantum transition as background. This mirrors the crypto-agility
+of the Cryptomigrate project.
 
 ## Standalone, and Route B — optional partners
 
@@ -173,10 +186,12 @@ When installed alongside it, each is a pure upgrade:
 
 **sentinel-vision** (the hands) — via a guarded `import sentinel_vision` or
 `sentinel-vision-cli`:
-* **scan(binary)** turns "behaved oddly" into a verdict — is the agent's code
-  known malware, validly signed, or clean?
-* **block_egress(ip)** makes the ladder's "cut egress" rung a real system-wide
-  OS-firewall block against known criminal netblocks.
+* **scan(binary)** can turn "behaved oddly" into a verdict — known malware,
+  validly signed, or clean. Available through the adapter; not yet invoked
+  automatically in the scan loop.
+* **block_egress(ip)** is a real system-wide OS-firewall block against known
+  criminal netblocks. The hook exists for a future "cut egress" rung; the pacify
+  ladder does not climb to it automatically yet.
 * **quarantine add (binary)** hands the neutralized binary to SV's hardened,
   service-protected vault with rollback — the file is moved, and SV becomes the
   system-of-record.

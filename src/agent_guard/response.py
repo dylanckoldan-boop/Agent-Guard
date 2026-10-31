@@ -43,6 +43,11 @@ except Exception:  # pragma: no cover
     _HAVE_PSUTIL = False
 
 
+class _PidReused(Exception):
+    """Raised when the live process at a PID is not the one Agent Guard recorded,
+    so a containment action is refused rather than aimed at an innocent process."""
+
+
 class Rung(IntEnum):
     THROTTLE = 1
     QUARANTINE = 2
@@ -70,48 +75,69 @@ class Containment:
     def __init__(self, quarantine: Quarantine | None = None) -> None:
         self._q = quarantine
 
-    def throttle(self, pid: int) -> str:
+    @staticmethod
+    def _resolve(pid: int, create_time: float | None):
+        """Return the live process only if it is the one we recorded.
+
+        A PID is reusable the instant its process exits, so by the time pacify
+        runs, ``pid`` may belong to an unrelated process. When a recorded start
+        time is supplied, it must match the live one or the action is refused —
+        containment must never land on a process we never identified (AG-A06)."""
+        p = psutil.Process(pid)
+        if create_time and abs(p.create_time() - create_time) > 1.0:
+            raise _PidReused(f"pid {pid} now belongs to a different process")
+        return p
+
+    def throttle(self, pid: int, create_time: float | None = None) -> str:
         if not _HAVE_PSUTIL:
             return "throttle unavailable (no psutil)"
         try:
-            p = psutil.Process(pid)
+            p = self._resolve(pid, create_time)
             if hasattr(psutil, "IDLE_PRIORITY_CLASS"):  # Windows
                 p.nice(psutil.IDLE_PRIORITY_CLASS)
             else:
                 p.nice(19)
             return "CPU priority reduced to idle"
+        except _PidReused as exc:
+            return f"throttle refused: {exc}"
         except Exception as exc:
             return f"throttle failed: {exc}"
 
-    def suspend(self, pid: int) -> str:
+    def suspend(self, pid: int, create_time: float | None = None) -> str:
         if not _HAVE_PSUTIL:
             return "suspend unavailable (no psutil)"
         try:
-            psutil.Process(pid).suspend()
+            self._resolve(pid, create_time).suspend()
             return "process frozen (resumable)"
+        except _PidReused as exc:
+            return f"suspend refused: {exc}"
         except Exception as exc:
             return f"suspend failed: {exc}"
 
-    def resume(self, pid: int) -> str:
+    def resume(self, pid: int, create_time: float | None = None) -> str:
         if not _HAVE_PSUTIL:
             return "resume unavailable (no psutil)"
         try:
-            psutil.Process(pid).resume()
+            self._resolve(pid, create_time).resume()
             return "process resumed"
+        except _PidReused as exc:
+            return f"resume refused: {exc}"
         except Exception as exc:
             return f"resume failed: {exc}"
 
-    def terminate(self, pid: int) -> str:
+    def terminate(self, pid: int, create_time: float | None = None) -> str:
         if not _HAVE_PSUTIL:
             return "terminate unavailable (no psutil)"
         try:
-            p = psutil.Process(pid)
+            p = self._resolve(pid, create_time)
             p.terminate()
             try:
                 p.wait(timeout=3)
             except Exception:
                 p.kill()
             return "process terminated"
+        except _PidReused as exc:
+            return f"terminate refused: {exc}"
         except Exception as exc:
             return f"terminate failed: {exc}"
 
@@ -151,14 +177,16 @@ class Response:
         the tamper-evident audit and escalates to a human at the end."""
         pid = getattr(agent, "pid", None)
         agent_id = getattr(agent, "agent_id", None) or f"pid:{pid}"
+        create_time = getattr(getattr(agent, "proc", None), "create_time", None) or None
         results: list[ActionResult] = []
         self._audit.append("pacify.begin", {"agent": agent_id, "pid": pid, "up_to": up_to.name, "auto": auto})
 
         for rung in Rung:
             if rung > up_to:
                 break
-            detail = self._do_rung(rung, pid, agent_id, exe_path)
-            ok = "fail" not in detail.lower() and "unavailable" not in detail.lower()
+            detail = self._do_rung(rung, pid, agent_id, exe_path, create_time)
+            low = detail.lower()
+            ok = not any(w in low for w in ("fail", "unavailable", "refused"))
             results.append(ActionResult(rung.name.lower(), ok, detail))
             self._audit.append(f"pacify.{rung.name.lower()}", {"agent": agent_id, "ok": ok, "detail": detail})
 
@@ -170,9 +198,11 @@ class Response:
         self._escalate(ev)
         return results
 
-    def _do_rung(self, rung: Rung, pid: int | None, agent_id: str, exe_path: str | None) -> str:
+    def _do_rung(
+        self, rung: Rung, pid: int | None, agent_id: str, exe_path: str | None, create_time: float | None = None
+    ) -> str:
         if rung is Rung.THROTTLE:
-            return self._c.throttle(pid) if pid else "no pid"
+            return self._c.throttle(pid, create_time) if pid else "no pid"
         if rung is Rung.QUARANTINE:
             if exe_path:
                 return self._c.quarantine_binary(exe_path, agent_id, "pacified")
@@ -183,17 +213,18 @@ class Response:
                 return "credential revoked; signed revocation propagated"
             return "revoke skipped (no signing authority)"
         if rung is Rung.SUSPEND:
-            return self._c.suspend(pid) if pid else "no pid"
+            return self._c.suspend(pid, create_time) if pid else "no pid"
         if rung is Rung.TERMINATE:
-            return self._c.terminate(pid) if pid else "no pid"
+            return self._c.terminate(pid, create_time) if pid else "no pid"
         return "unknown rung"
 
     def release(self, agent) -> ActionResult:
         """Reverse a suspension once an agent is cleared (suspend-and-preserve)."""
         pid = getattr(agent, "pid", None)
         agent_id = getattr(agent, "agent_id", None) or f"pid:{pid}"
-        detail = self._c.resume(pid) if pid else "no pid"
-        ok = "fail" not in detail.lower()
+        create_time = getattr(getattr(agent, "proc", None), "create_time", None) or None
+        detail = self._c.resume(pid, create_time) if pid else "no pid"
+        ok = "fail" not in detail.lower() and "refused" not in detail.lower()
         if hasattr(agent, "state") and ok:
             agent.state = "healthy"
         self._audit.append("response.release", {"agent": agent_id, "detail": detail})

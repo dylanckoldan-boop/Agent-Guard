@@ -28,8 +28,10 @@ a best-effort note, never an exception.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import sys
 
 from agent_guard.quarantine import Quarantine
 from agent_guard.response import Containment
@@ -38,15 +40,47 @@ _CLI = "sentinel-vision-cli"
 _PLUGIN_NAME = "agent-guard"  # the name sentinel-vision files Agent Guard's records under
 
 
+def _canonical_dirs() -> list[str]:
+    """The trusted directories sentinel-vision installs its CLI into — never
+    ``$PATH``. A ``sentinel-vision-cli`` planted earlier on PATH must not be run
+    as if it were the real thing, since Agent Guard executes it with the agent's
+    fate in its hands (AG-A04 / AG-C04)."""
+    if sys.platform == "win32":
+        pf = os.environ.get("ProgramFiles", r"C:\Program Files")
+        pf86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+        return [os.path.join(pf, "Sentinel Vision"), os.path.join(pf86, "Sentinel Vision")]
+    if sys.platform == "darwin":
+        return ["/Applications/Sentinel Vision.app/Contents/MacOS", "/usr/local/sentinel-vision/bin"]
+    return ["/opt/sentinel-vision/bin", "/usr/lib/sentinel-vision", "/usr/libexec/sentinel-vision"]
+
+
+def _resolve_cli() -> str | None:
+    """Locate sentinel-vision-cli in a canonical install directory, ignoring
+    ``$PATH`` entirely (``shutil.which`` is scoped to the trusted dirs)."""
+    return shutil.which(_CLI, path=os.pathsep.join(_canonical_dirs()))
+
+
+def _host_only(hostport: str) -> str:
+    """Host from 'ip:port' / '[v6]:port' / bare host — IPv6-safe, so a bracketed
+    address is not truncated at a colon inside it."""
+    s = (hostport or "").strip()
+    if s.startswith("["):
+        return s[1:].split("]", 1)[0]
+    if s.count(":") == 1:
+        return s.rsplit(":", 1)[0]
+    return s
+
+
 def probe() -> tuple[bool, str]:
-    """Return (present, how). Prefers the importable package, then the CLI."""
+    """Return (present, how). Prefers the importable package, then the CLI
+    resolved from a canonical install location (not from $PATH)."""
     try:
         import sentinel_vision  # noqa: F401
 
         return True, "in-process (import sentinel_vision)"
     except Exception:
         pass
-    if shutil.which(_CLI):
+    if _resolve_cli():
         return True, f"cli ({_CLI})"
     return False, "not installed"
 
@@ -66,7 +100,7 @@ class SentinelVisionAdapter:
             self._mod = sentinel_vision
         except Exception:
             self._mod = None
-        self._cli = shutil.which(_CLI)
+        self._cli = _resolve_cli()
 
     @property
     def available(self) -> bool:
@@ -81,6 +115,8 @@ class SentinelVisionAdapter:
                     [self._cli, "scan", path, "--no-quarantine", "--json"],
                     capture_output=True, text=True, timeout=120,
                 )
+                if out.returncode != 0:
+                    return {"verdict": "unknown", "detail": f"scan failed (exit {out.returncode}): {out.stderr.strip()}"}
                 data = json.loads(out.stdout or "{}")
                 threats = data.get("threats") or data.get("infected") or 0
                 verdict = "malware" if threats else "clean"
@@ -102,7 +138,9 @@ class SentinelVisionAdapter:
                 return f"firewall block failed: {exc}"
         if self._cli:
             try:
-                subprocess.run([self._cli, "net", "block", ip], capture_output=True, text=True, timeout=30)
+                out = subprocess.run([self._cli, "net", "block", ip], capture_output=True, text=True, timeout=30)
+                if out.returncode != 0:
+                    return f"firewall block of {ip} failed (exit {out.returncode}): {out.stderr.strip()}"
                 return f"requested OS firewall block of {ip}"
             except Exception as exc:
                 return f"firewall block failed: {exc}"
@@ -182,8 +220,7 @@ def make_containment(quarantine: Quarantine | None) -> Containment:
 
     class _SVContainment(Containment):
         def block_egress(self, host: str) -> str:
-            ip = host.rsplit(":", 1)[0]
-            return adapter.block_ip(ip)
+            return adapter.block_ip(_host_only(host))
 
         def quarantine_binary(self, path: str, agent_id: str, reason: str) -> str:
             res = adapter.quarantine_add(path, reason)

@@ -95,8 +95,22 @@ class Tripwire:
         return planted
 
     def is_canary(self, path: str) -> str | None:
-        """Return the decoy id if ``path`` is a planted canary, else None."""
-        return self._canary_paths.get(str(Path(path)))
+        """Return the decoy id if ``path`` is a planted canary, else None.
+
+        A canary is recognised two ways: by a path this Tripwire planted, or by the
+        marker the file carries on disk. The marker makes a canary self-identifying,
+        so a *later* guard run — one that scans but did not plant — still trips on
+        contact (AG-A02), without having to share planted-path state between runs."""
+        known = self._canary_paths.get(str(Path(path)))
+        if known is not None:
+            return known
+        try:
+            with open(path, "rb") as fh:
+                if fh.read(len(_CANARY_MARKER)) == _CANARY_MARKER:
+                    return f"canary:{Path(path)}"
+        except OSError:
+            pass
+        return None
 
     # -- contact ------------------------------------------------------------
     def on_contact(self, agent_id: str, decoy_id: str, pid: int | None = None, detail: str = "") -> TripEvent:

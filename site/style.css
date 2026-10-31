@@ -24,7 +24,7 @@
     --border: #d3dde6;
     --text: #13202b;
     --muted: #4c5c6b;
-    --accent: #0a7f8d;
+    --accent: #087481;  /* ≥ 4.5:1 on both --bg and --surface for WCAG AA (AG-E03) */
     --accent-ink: #ffffff;
     --ok: #0f7a44;
     --danger: #b3242f;
@@ -122,6 +122,33 @@ footer.site { border-top: 1px solid var(--border); padding: 2rem 0 3rem; color: 
 footer.site a { color: var(--muted); }
 footer.site a:hover { color: var(--text); }
 .flinks { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-bottom: .8rem; }
+
+/* small layout utilities — replace inline style="" so the pages need no
+   'unsafe-inline' in their Content-Security-Policy (AG-B01) */
+.no-top { border-top: none; }
+.wrap.narrow { max-width: 48rem; }
+.page-title { font-size: 2rem; margin: .2rem 0 1rem; }
+.fineprint { color: var(--muted); font-size: .9rem; }
+.mt-sm { margin-top: 1rem; }
+.mt-md { margin-top: 1.25rem; }
+.mt-lg { margin-top: 1.5rem; }
+.mt-xl { margin-top: 2rem; }
+
+/* OSI layer stack (the "where it watches" section) */
+.osi { display: grid; gap: .4rem; margin: 1.3rem 0; }
+.osi-row {
+  display: grid; grid-template-columns: 2.4rem 8rem 1fr; gap: .9rem; align-items: baseline;
+  padding: .6rem .85rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+}
+.osi-row.on { border-color: var(--accent); }
+.osi-row.off { opacity: .68; }
+.osi-n { font-family: ui-monospace, Menlo, monospace; font-size: .85rem; color: var(--accent); }
+.osi-l { font-weight: 650; }
+.osi-w { color: var(--muted); font-size: .95rem; }
+@media (max-width: 40rem) {
+  .osi-row { grid-template-columns: 2.4rem 1fr; }
+  .osi-w { grid-column: 1 / -1; }
+}
 
 /* reflow */
 @media (max-width: 60rem) {

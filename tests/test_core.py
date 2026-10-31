@@ -7,7 +7,7 @@ import json
 import pytest
 
 from agent_guard.config import Settings
-from agent_guard.core import AgentGuard, GuardSnapshot
+from agent_guard.core import AgentGuard, GuardSnapshot, _quarantine_target
 from agent_guard.detect import DetectedAgent, ProcessInfo, Reason
 from agent_guard.identity import Scope
 from agent_guard.integrations import partner_status
@@ -234,6 +234,24 @@ def test_pacify_climbs_to_the_requested_rung(guard, requested, reached):
 
     assert guard.response.history[-1]["up_to"] == reached
     assert d.state == "contained"
+
+
+@pytest.mark.parametrize(
+    ("exe", "cmdline", "expected"),
+    [
+        # a script run under an interpreter: quarantine the script
+        ("/usr/bin/python3", ["/usr/bin/python3", "/home/x/agent.py"], "/home/x/agent.py"),
+        ("", ["python", "langchain_agent.py"], "langchain_agent.py"),
+        # a `-m module` run: NOTHING safe to isolate — never the interpreter (AG-A05)
+        ("/usr/bin/python3", ["python", "-m", "crewai", "run"], None),
+        ("/usr/local/bin/node", ["node"], None),
+        # a native binary: quarantine the binary itself
+        ("/opt/rogue/rogue.bin", ["/opt/rogue/rogue.bin", "--go"], "/opt/rogue/rogue.bin"),
+    ],
+)
+def test_quarantine_target_never_picks_the_interpreter(exe, cmdline, expected):
+    proc = ProcessInfo(pid=1, name="p", exe=exe, cmdline=cmdline)
+    assert _quarantine_target(proc) == expected
 
 
 def test_a_low_risk_detection_is_neither_flagged_nor_contained(guard):
