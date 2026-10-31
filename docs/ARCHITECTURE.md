@@ -1,6 +1,6 @@
-# Agent Guard — architecture
+# Foldward — architecture
 
-Agent Guard holds an oversight **net** across a fleet of AI agents and catches
+Foldward holds an oversight **net** across a fleet of AI agents and catches
 rogue agent activity, then **pacifies** it — graduated, reversible-first
 containment on resources the defender owns. It is a standalone application; the
 companion projects [sentinel-vision](https://github.com/dylanckoldan-boop/sentinel-vision)
@@ -10,7 +10,7 @@ and [cryptomigrate](https://github.com/dylanckoldan-boop/Cryptomigrate) are
 ## The threat: two kinds of rogue agent
 
 An AI agent placed inside a system — reading files, calling tools, opening
-network connections — can go wrong two ways, and Agent Guard is built to catch
+network connections — can go wrong two ways, and Foldward is built to catch
 both with one apparatus:
 
 * **The misaligned agent.** Sanctioned, valid credentials, but its objective is
@@ -83,7 +83,7 @@ the scoring policy is tested without any live processes.
 5. **terminate** — last resort, after the binary is preserved.
 
 **Honest boundary.** Everything happens on resources the defender owns — deny,
-revoke, isolate, freeze. Agent Guard never reaches into the agent's own
+revoke, isolate, freeze. Foldward never reaches into the agent's own
 infrastructure to disable or damage it: that "hack-back" is technically
 unreliable and generally unlawful (e.g. under the U.S. Computer Fraud and Abuse
 Act). Anything beyond our perimeter is escalated to a human.
@@ -102,7 +102,7 @@ clear a threshold *and* enough independent sentinels must agree, so one noisy or
 compromised sentinel can neither force a containment nor veto one. The tripwire
 is special-cased: a decoy touch is self-authorizing. This both resists a single
 compromised sentinel and keeps the pacify mechanism itself from being abused.
-Today these sentinels are computed within one Agent Guard process and their votes
+Today these sentinels are computed within one Foldward process and their votes
 are not themselves signed; distributing them across hosts with signed votes is
 future work.
 
@@ -123,7 +123,7 @@ Cryptomigrate project's attestation log.
 
 Mix networks shuffle entrances and exits so a watcher cannot link one to the
 other. The crucial design decision is *whose* traffic goes through the doors, and
-Agent Guard answers it with opposite rules for the two planes:
+Foldward answers it with opposite rules for the two planes:
 
 * **The watched agents' traffic is never mixed.** East-west flow analysis is one
   of the net's best detection signals — an agent beaconing somewhere new or
@@ -150,7 +150,7 @@ transport, so the unlinkability property is designed, not yet delivered. It is
 described here as intent, not as a shipped guarantee.
 
 Steganographic and mix/onion channels are exactly how real malware hides its
-command-and-control, so Agent Guard assumes a sophisticated agent will attempt a
+command-and-control, so Foldward assumes a sophisticated agent will attempt a
 covert channel to phone home — and answers it the same way as the rest of the
 design: don't rely on spotting the hidden channel, constrain *reachability* so
 even a perfectly concealed channel has nowhere worth connecting to (default-deny
@@ -170,13 +170,13 @@ what keeps a single compromised watcher from blinding or weaponizing the mesh.
 
 Signature basis: FIPS 204 (ML-DSA-65) with Ed25519 (RFC 8032 / FIPS 186-5);
 quarantine encryption is AES-256-GCM (NIST SP 800-38D). ML-KEM (FIPS 203) is
-**not** used — Agent Guard signs, it does not do key exchange. NIST IR 8547
+**not** used — Foldward signs, it does not do key exchange. NIST IR 8547
 tracks the post-quantum transition as background. This mirrors the crypto-agility
 of the Cryptomigrate project.
 
 ## Standalone, and Route B — optional partners
 
-Agent Guard runs fully on its own: its own detection, its own pacify ladder
+Foldward runs fully on its own: its own detection, its own pacify ladder
 (process control via `psutil`), its own AES-256-GCM quarantine, its own signed
 audit. The partners appear **nowhere** in its package metadata — not a
 dependency, not an optional extra. Only a guarded `import` / CLI probe in
@@ -195,11 +195,11 @@ When installed alongside it, each is a pure upgrade:
 * **quarantine add (binary)** hands the neutralized binary to SV's hardened,
   service-protected vault with rollback — the file is moved, and SV becomes the
   system-of-record.
-* **protected plugin log** — Agent Guard mirrors every containment (with its
+* **protected plugin log** — Foldward mirrors every containment (with its
   signed audit head) into SV's append-only `plugin-log`, which on Windows the
   protection service keeps where a program running as the user can add and read
   but cannot change or delete. So a compromised agent cannot erase its own
-  containment record even if it reaches Agent Guard's own store. This is the real
+  containment record even if it reaches Foldward's own store. This is the real
   Layer-4 Wall: made true at the OS level rather than by an un-passed reference.
   (SV's `config.plugin_dir` is an ordinary user folder and is deliberately *not*
   used for these records.)
@@ -210,11 +210,11 @@ When installed alongside it, each is a pure upgrade:
 * **attest(state)** emits a PQ-signed attestation of oversight state in CM's
   format for auditors.
 
-Division of labour: **Agent Guard is the brain** (detect, decide, contain);
+Division of labour: **Foldward is the brain** (detect, decide, contain);
 **sentinel-vision lends its hands** (scan, block, vault, the Wall);
 **cryptomigrate is the notary and crypto-hygiene lens.**
 
-Route B also lets Agent Guard's GUI pages appear *inside* sentinel-vision as a
+Route B also lets Foldward's GUI pages appear *inside* sentinel-vision as a
 tab, through a plugin entry point, with no dependency in either direction — see
 [`SENTINEL_VISION_INTEGRATION.md`](SENTINEL_VISION_INTEGRATION.md).
 

@@ -6,10 +6,10 @@ import types
 
 import pytest
 
-from agent_guard import response as response_module
-from agent_guard.quarantine import Quarantine
-from agent_guard.registry import RevocationRegistry
-from agent_guard.response import RUNG_BY_NAME, ActionResult, Containment, Response, Rung
+from foldward import response as response_module
+from foldward.quarantine import Quarantine
+from foldward.registry import RevocationRegistry
+from foldward.response import RUNG_BY_NAME, ActionResult, Containment, Response, Rung
 
 
 @pytest.fixture

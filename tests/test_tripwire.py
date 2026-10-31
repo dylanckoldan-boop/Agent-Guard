@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_guard.tripwire import CANARY_NAMES, Decoy, Tripwire
+from foldward.tripwire import CANARY_NAMES, Decoy, Tripwire
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ def test_plant_canaries_writes_decoy_files(tripwire, bait_dir):
     for p in planted:
         assert Path(p).parent == bait_dir
         assert Path(p).is_file()
-        assert b"agent-guard-canary" in Path(p).read_bytes()
+        assert b"foldward-canary" in Path(p).read_bytes()
     assert len(tripwire.decoys()) == len(planted)
     assert {d.kind for d in tripwire.decoys()} == {"file"}
 

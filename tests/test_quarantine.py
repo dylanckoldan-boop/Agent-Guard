@@ -11,7 +11,7 @@ import time
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from agent_guard.quarantine import Quarantine
+from foldward.quarantine import Quarantine
 
 PAYLOAD = b"#!/usr/bin/env python\nprint('rogue agent')\n" + bytes(range(256)) * 4
 
@@ -40,7 +40,7 @@ def blob_path(vault, item):
 
 
 def test_all_state_lives_under_the_isolated_data_root(vault, tmp_path):
-    assert vault._root == tmp_path / "AgentGuard" / "quarantine"
+    assert vault._root == tmp_path / "Foldward" / "quarantine"
     assert (vault._root / "quarantine.key").is_file()
 
 

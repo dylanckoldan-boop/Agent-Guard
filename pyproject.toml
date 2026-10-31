@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-guard"
+name = "foldward"
 version = "0.1.0"
 description = "A containment net for autonomous AI agents — detect rogue agent activity and pacify it, reversibly, within your own perimeter."
 readme = "README.md"
@@ -30,20 +30,20 @@ gui = ["PySide6>=6.6"]
 dev = ["pytest>=7.4", "ruff>=0.4"]
 
 [project.scripts]
-agent-guard-cli = "agent_guard.cli:main"
+foldward-cli = "foldward.cli:main"
 
 [project.gui-scripts]
-agent-guard = "agent_guard.gui.app:main"
+foldward = "foldward.gui.app:main"
 
-# Route B seam: when sentinel-vision is installed alongside Agent Guard, its
-# plugin host discovers this entry point and Agent Guard's pages appear as a tab
+# Route B seam: when sentinel-vision is installed alongside Foldward, its
+# plugin host discovers this entry point and Foldward's pages appear as a tab
 # inside sentinel-vision — with no dependency in either direction. Harmless when
 # sentinel-vision is absent (nothing reads the group).
 [project.entry-points."sentinel_vision.plugins"]
-agent_guard = "agent_guard.gui.plugin:register"
+foldward = "foldward.gui.plugin:register"
 
 [project.urls]
-Homepage = "https://github.com/dylanckoldan-boop/Agent-Guard"
+Homepage = "https://github.com/dylanckoldan-boop/Foldward"
 
 [tool.setuptools.packages.find]
 where = ["src"]

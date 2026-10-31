@@ -6,8 +6,8 @@ import dataclasses
 
 import pytest
 
-from agent_guard.crypto import new_signer, verifier_from_public
-from agent_guard.registry import Revocation, RevocationRegistry
+from foldward.crypto import new_signer, verifier_from_public
+from foldward.registry import Revocation, RevocationRegistry
 
 
 @pytest.fixture

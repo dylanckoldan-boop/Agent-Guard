@@ -1,16 +1,16 @@
-# Agent Guard
+# Foldward
 
 **A containment net for autonomous AI agents — it catches rogue agent activity and pacifies it, reversibly, within your own perimeter.**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Agent Guard holds an oversight **net** across a fleet of AI agents — natively spawned or *uploaded* onto a host — and watches the water. When an agent goes rogue, Agent Guard **pacifies** it: graduated, reversible-first containment (throttle → quarantine → revoke → suspend → terminate), climbing only as high as the threat demands, and only ever on resources you own. It never reaches into the agent's own infrastructure.
+Foldward holds an oversight **net** across a fleet of AI agents — natively spawned or *uploaded* onto a host — and watches the water. When an agent goes rogue, Foldward **pacifies** it: graduated, reversible-first containment (throttle → quarantine → revoke → suspend → terminate), climbing only as high as the threat demands, and only ever on resources you own. It never reaches into the agent's own infrastructure.
 
-It is a **standalone application**. [sentinel-vision](https://github.com/dylanckoldan-boop/sentinel-vision) and [cryptomigrate](https://github.com/dylanckoldan-boop/Cryptomigrate) are *optional* — detected at runtime, never a dependency. With neither installed, Agent Guard is fully useful; with sentinel-vision installed, the net supercharges it, catching rogue agents **sentinel-vision can't see on its own** and using its firewall and hardened vault to contain them.
+It is a **standalone application**. [sentinel-vision](https://github.com/dylanckoldan-boop/sentinel-vision) and [cryptomigrate](https://github.com/dylanckoldan-boop/Cryptomigrate) are *optional* — detected at runtime, never a dependency. With neither installed, Foldward is fully useful; with sentinel-vision installed, the net supercharges it, catching rogue agents **sentinel-vision can't see on its own** and using its firewall and hardened vault to contain them.
 
 ## Two threats, one net
 
-An AI agent with tools and network access goes wrong two ways, and Agent Guard catches both:
+An AI agent with tools and network access goes wrong two ways, and Foldward catches both:
 
 - **The misaligned agent** — sanctioned, valid credentials, but its objective is wrong at the edges. An *alignment* failure at the machine boundary.
 - **The hijacked agent** — a legitimate agent subverted by indirect prompt injection, now acting for someone else. Its first tell is a *network* move — exfiltration, a new C2 endpoint, a reach it never made before.
@@ -31,7 +31,7 @@ Defense in depth — defeating any one layer still leaves the next.
 ## Install
 
 ```bash
-git clone https://github.com/dylanckoldan-boop/Agent-Guard && cd Agent-Guard
+git clone https://github.com/dylanckoldan-boop/Foldward && cd Foldward
 pip install -e ".[dev]"      # core + tests
 pip install -e ".[gui]"      # add the desktop app (PySide6)
 ```
@@ -42,18 +42,18 @@ Core dependencies are just `psutil` and `cryptography`. Neither partner is pulle
 
 ```bash
 # command line
-agent-guard-cli status                 # signer, data location, which partners are present
-agent-guard-cli scan                   # detect and score agent processes (exit 1 if any flagged)
-agent-guard-cli scan --json            # machine-readable
-agent-guard-cli canaries --dir ~/project ~/Downloads   # plant decoy files
-agent-guard-cli register --label researcher --actions summarize --hosts api.anthropic.com
-agent-guard-cli watch                  # continuous daemon
-agent-guard-cli quarantine list
-agent-guard-cli attest --json          # PQ-signed attestation of oversight state
-agent-guard-cli selftest               # verify the crypto backend
+foldward-cli status                 # signer, data location, which partners are present
+foldward-cli scan                   # detect and score agent processes (exit 1 if any flagged)
+foldward-cli scan --json            # machine-readable
+foldward-cli canaries --dir ~/project ~/Downloads   # plant decoy files
+foldward-cli register --label researcher --actions summarize --hosts api.anthropic.com
+foldward-cli watch                  # continuous daemon
+foldward-cli quarantine list
+foldward-cli attest --json          # PQ-signed attestation of oversight state
+foldward-cli selftest               # verify the crypto backend
 
 # desktop app
-agent-guard                            # the control-room GUI
+foldward                            # the control-room GUI
 ```
 
 Exit codes: `0` clean · `1` a rogue agent is flagged · `2` error — handy for CI and cron.
@@ -72,7 +72,7 @@ A control-room GUI (PySide6) in the same palette as sentinel-vision:
 
 ## The "many doors" principle
 
-Mix networks shuffle entrances and exits so a watcher can't link them. Agent Guard applies this with **opposite rules for the two planes**:
+Mix networks shuffle entrances and exits so a watcher can't link them. Foldward applies this with **opposite rules for the two planes**:
 
 - **The watched agents' traffic is never mixed** — their east-west flow *is* the net's best detection signal, so it stays fully observable. Data plane watched.
 - **The oversight traffic *is* mixed** — sentinel votes and containment commands run padded with cover traffic, so a hijacked agent can't tell which sentinel flagged it or trace the consensus core. Control plane hidden.
@@ -83,12 +83,12 @@ Today the mix channel is a **design prototype**: it produces fixed-size, indisti
 
 ## Standalone, and Route B
 
-Agent Guard runs entirely on its own. When the partners are installed, it opens a port:
+Foldward runs entirely on its own. When the partners are installed, it opens a port:
 
-- **sentinel-vision** lends its *hands*, each reached through the adapter when it is installed — `scan` an agent's binary for a malware verdict, `block_egress` at the OS firewall, hand the binary to its hardened vault with rollback (the file is moved, not copied), and mirror every containment into its append-only plugin log, which on Windows its protection service keeps so even a program running as you cannot change or delete it. (On macOS and Linux that log is an ordinary user file until the service exists.) Under Route B — implemented in **sentinel-vision 0.4.1** — Agent Guard's pages appear as a tab *inside* sentinel-vision, with no dependency either way.
+- **sentinel-vision** lends its *hands*, each reached through the adapter when it is installed — `scan` an agent's binary for a malware verdict, `block_egress` at the OS firewall, hand the binary to its hardened vault with rollback (the file is moved, not copied), and mirror every containment into its append-only plugin log, which on Windows its protection service keeps so even a program running as you cannot change or delete it. (On macOS and Linux that log is an ordinary user file until the service exists.) Under Route B — implemented in **sentinel-vision 0.4.1** — Foldward's pages appear as a tab *inside* sentinel-vision, with no dependency either way.
 - **cryptomigrate** is the *notary and crypto lens* — scan a flagged agent's directory for weak crypto, and emit PQ-signed attestations of oversight state.
 
-How Agent Guard plugs into sentinel-vision (the entry point, the `quarantine add` / `plugin-log` / `net block` verbs, and the Windows plugin install) is in [`docs/SENTINEL_VISION_INTEGRATION.md`](docs/SENTINEL_VISION_INTEGRATION.md).
+How Foldward plugs into sentinel-vision (the entry point, the `quarantine add` / `plugin-log` / `net block` verbs, and the Windows plugin install) is in [`docs/SENTINEL_VISION_INTEGRATION.md`](docs/SENTINEL_VISION_INTEGRATION.md).
 
 ## What the tests prove
 
@@ -103,11 +103,11 @@ pytest -q
 - **response** — the pacify ladder climbs, revokes, and records; a vanished process degrades gracefully; `release` reverses a suspension.
 - **quarantine** — encrypt/restore round-trips and **fails closed if the stored blob is altered**.
 - **core / mesh** — a decoy auto-contains; consensus waives quorum on a decoy but holds below threshold; the mix channel pads oversight traffic and bypasses on urgent.
-- **integrations** — with no partners installed, everything degrades to Agent Guard's own mechanisms, never an error.
+- **integrations** — with no partners installed, everything degrades to Foldward's own mechanisms, never an error.
 
 ## Standards basis
 
-- **Signatures:** [FIPS 204](https://csrc.nist.gov/pubs/fips/204/final) (ML-DSA-65) paired with Ed25519 ([RFC 8032](https://www.rfc-editor.org/rfc/rfc8032), [FIPS 186-5](https://csrc.nist.gov/pubs/fips/186-5/final)); quarantine at rest uses AES-256-GCM ([NIST SP 800-38D](https://csrc.nist.gov/pubs/sp/800/38/d/final)). ML-KEM (FIPS 203) is **not** used — Agent Guard signs, it does not do key exchange. Post-quantum transition is tracked as background by [NIST IR 8547](https://csrc.nist.gov/pubs/ir/8547/ipd).
+- **Signatures:** [FIPS 204](https://csrc.nist.gov/pubs/fips/204/final) (ML-DSA-65) paired with Ed25519 ([RFC 8032](https://www.rfc-editor.org/rfc/rfc8032), [FIPS 186-5](https://csrc.nist.gov/pubs/fips/186-5/final)); quarantine at rest uses AES-256-GCM ([NIST SP 800-38D](https://csrc.nist.gov/pubs/sp/800/38/d/final)). ML-KEM (FIPS 203) is **not** used — Foldward signs, it does not do key exchange. Post-quantum transition is tracked as background by [NIST IR 8547](https://csrc.nist.gov/pubs/ir/8547/ipd).
 - **AI in operational settings:** the principle that a human stays responsible and must be able to bypass, replace, and plan for the failure of the AI.
 - Companion projects: [sentinel-vision](https://github.com/dylanckoldan-boop/sentinel-vision) (antimalware; hybrid ML-DSA-65 + Ed25519 signed updates) and [cryptomigrate](https://github.com/dylanckoldan-boop/Cryptomigrate) (crypto discovery, migration, and signed attestation).
 
@@ -117,9 +117,9 @@ A research concept and a working v0.1, not a certified safety system. The decept
 
 ## How this was built
 
-The author designed the architecture, the four-layer model, the many-doors principle, and the module structure, and built the implementation with AI assistance (Anthropic's Claude) under that direction. Every change is run through the automated test suite, and the maintainer is responsible for all of it. Correctness is established by the test suite and the explicit invariants above, not by assertion — mirroring the companion [cryptomigrate](https://github.com/dylanckoldan-boop/Cryptomigrate) and [machineward](https://github.com/dylanckoldan-boop/machineward) projects. Agent Guard itself contains no AI model and sends nothing to any AI service.
+The author designed the architecture, the four-layer model, the many-doors principle, and the module structure, and built the implementation with AI assistance (Anthropic's Claude) under that direction. Every change is run through the automated test suite, and the maintainer is responsible for all of it. Correctness is established by the test suite and the explicit invariants above, not by assertion — mirroring the companion [cryptomigrate](https://github.com/dylanckoldan-boop/Cryptomigrate) and [machineward](https://github.com/dylanckoldan-boop/machineward) projects. Foldward itself contains no AI model and sends nothing to any AI service.
 
-Anthropic, Claude, OpenAI, LangChain, CrewAI and other product names are trademarks of their owners. They are named only to describe compatibility or what Agent Guard can detect; this project is not affiliated with or endorsed by them.
+Anthropic, Claude, OpenAI, LangChain, CrewAI and other product names are trademarks of their owners. They are named only to describe compatibility or what Foldward can detect; this project is not affiliated with or endorsed by them.
 
 ## License
 

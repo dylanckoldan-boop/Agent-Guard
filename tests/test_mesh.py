@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from agent_guard.mesh import DEFAULT_SENTINELS, Consensus, Decision, MixChannel, Sentinel
+from foldward.mesh import DEFAULT_SENTINELS, Consensus, Decision, MixChannel, Sentinel
 
 
 # ------------------------------------------------------------------------ consensus

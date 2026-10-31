@@ -1,4 +1,4 @@
-"""The AgentGuard facade: wiring, admission, containment policy, snapshot and attestation."""
+"""The Foldward facade: wiring, admission, containment policy, snapshot and attestation."""
 
 from __future__ import annotations
 
@@ -6,13 +6,13 @@ import json
 
 import pytest
 
-from agent_guard.config import Settings
-from agent_guard.core import AgentGuard, GuardSnapshot, _quarantine_target
-from agent_guard.detect import DetectedAgent, ProcessInfo, Reason
-from agent_guard.identity import Scope
-from agent_guard.integrations import partner_status
-from agent_guard.mesh import MeshSnapshot
-from agent_guard.response import Containment
+from foldward.config import Settings
+from foldward.core import Foldward, GuardSnapshot, _quarantine_target
+from foldward.detect import DetectedAgent, ProcessInfo, Reason
+from foldward.identity import Scope
+from foldward.integrations import partner_status
+from foldward.mesh import MeshSnapshot
+from foldward.response import Containment
 
 DECOY_REASON = Reason("touched a decoy / honeytoken", 100, "tripwire")
 
@@ -39,13 +39,13 @@ def test_guard_builds_with_default_settings(guard):
 
 
 def test_guard_state_is_confined_to_the_isolated_data_root(guard, tmp_path):
-    assert (tmp_path / "AgentGuard" / "quarantine" / "quarantine.key").is_file()
+    assert (tmp_path / "Foldward" / "quarantine" / "quarantine.key").is_file()
 
 
 def test_a_guard_built_without_settings_loads_and_saves_them_in_the_isolated_root(tmp_path):
-    AgentGuard()
+    Foldward()
 
-    assert (tmp_path / "AgentGuard" / "settings.json").is_file()
+    assert (tmp_path / "Foldward" / "settings.json").is_file()
 
 
 def test_default_settings_are_conservative():
@@ -60,7 +60,7 @@ def test_default_settings_are_conservative():
 def test_settings_round_trip_through_the_isolated_file(tmp_path):
     Settings(report_only=False, scan_interval_s=9.0).save()
 
-    assert (tmp_path / "AgentGuard" / "settings.json").is_file()
+    assert (tmp_path / "Foldward" / "settings.json").is_file()
     loaded = Settings.load()
     assert loaded.report_only is False
     assert loaded.scan_interval_s == 9.0
@@ -68,13 +68,13 @@ def test_settings_round_trip_through_the_isolated_file(tmp_path):
 
 def test_settings_loading_ignores_unknown_keys(tmp_path):
     saved = {"report_only": False, "added_by_a_future_version": 1}
-    (tmp_path / "AgentGuard" / "settings.json").write_text(json.dumps(saved), "utf-8")
+    (tmp_path / "Foldward" / "settings.json").write_text(json.dumps(saved), "utf-8")
 
     assert Settings.load().report_only is False
 
 
 def test_settings_loading_survives_a_corrupt_file(tmp_path):
-    (tmp_path / "AgentGuard" / "settings.json").write_text("{not json", "utf-8")
+    (tmp_path / "Foldward" / "settings.json").write_text("{not json", "utf-8")
 
     assert Settings.load() == Settings()
 
@@ -151,7 +151,7 @@ def test_every_evaluation_emits_a_mixed_oversight_record(guard):
 
 
 def test_decoy_touch_is_only_flagged_when_auto_containment_is_off():
-    g = AgentGuard(Settings(auto_contain_on_decoy=False))  # report_only stays on
+    g = Foldward(Settings(auto_contain_on_decoy=False))  # report_only stays on
     d = detection([DECOY_REASON])
 
     g._evaluate(d)
@@ -163,7 +163,7 @@ def test_decoy_touch_is_only_flagged_when_auto_containment_is_off():
 def test_consensus_containment_acts_only_when_report_only_is_off():
     reasons = [Reason("no credential", 100, "identity"), Reason("fan-out", 100, "reach"),
                Reason("spawn", 100, "behaviour")]
-    watching, acting = AgentGuard(Settings()), AgentGuard(Settings(report_only=False))
+    watching, acting = Foldward(Settings()), Foldward(Settings(report_only=False))
     quiet, active = detection(reasons, "quiet-1"), detection(reasons, "active-1")
 
     watching._evaluate(quiet)
@@ -176,7 +176,7 @@ def test_consensus_containment_acts_only_when_report_only_is_off():
 
 
 def test_one_noisy_sentinel_cannot_force_containment_even_when_acting():
-    g = AgentGuard(Settings(report_only=False))
+    g = Foldward(Settings(report_only=False))
     d = detection([Reason("fan-out", 100, "reach")])
 
     g._evaluate(d)
@@ -190,7 +190,7 @@ def test_one_noisy_sentinel_cannot_force_containment_even_when_acting():
     [pytest.param(0, "flagged", id="at-threshold"), pytest.param(1, "healthy", id="below-threshold")],
 )
 def test_the_flag_threshold_is_inclusive(margin, state):
-    g = AgentGuard(Settings(risk_flag_threshold=35 + margin))
+    g = Foldward(Settings(risk_flag_threshold=35 + margin))
     d = detection([Reason("unregistered agent", 35, "identity")])
 
     g._evaluate(d)
@@ -206,7 +206,7 @@ def test_the_contain_threshold_setting_gates_consensus_containment(contain_thres
         Reason("fan-out", 15, "reach"),
         Reason("spawn", 20, "behaviour"),
     ]
-    g = AgentGuard(Settings(report_only=False, risk_contain_threshold=contain_threshold))
+    g = Foldward(Settings(report_only=False, risk_contain_threshold=contain_threshold))
     d = detection(reasons)
 
     g._evaluate(d)
@@ -279,7 +279,7 @@ def test_a_failing_alert_listener_does_not_break_containment(guard):
 
 
 def test_quiet_mode_suppresses_info_alerts_only():
-    g = AgentGuard(Settings(quiet_mode=True))
+    g = Foldward(Settings(quiet_mode=True))
     levels = []
     g.alert_listeners.append(lambda title, text, level: levels.append(level))
 
@@ -369,12 +369,12 @@ def test_snapshot_reports_a_broken_audit_chain(guard):
 
 
 # --------------------------------------------------------------------- attestation
-def test_attest_returns_a_signed_agent_guard_attestation(guard):
+def test_attest_returns_a_signed_foldward_attestation(guard):
     att = guard.attest()
 
-    assert att["notary"] == "agent-guard"
+    assert att["notary"] == "foldward"
     assert att["signature"] is not None
-    assert att["format"] == "agent-guard-attestation/1"
+    assert att["format"] == "foldward-attestation/1"
     assert att["signer_ref"] == guard.signer.public_ref
     assert att["state"]["audit_intact"] is True
 
@@ -404,7 +404,7 @@ def test_attestation_reflects_what_the_guard_has_done(guard):
 
 @pytest.mark.parametrize("scheme", ["auto", "ed25519", "hmac"])
 def test_guard_runs_on_every_signer_scheme(scheme):
-    g = AgentGuard(Settings(signer_scheme=scheme))
+    g = Foldward(Settings(signer_scheme=scheme))
     ident = g.register_agent("x", Scope())
 
     assert g.trust.verify(ident.credential)

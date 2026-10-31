@@ -1,4 +1,4 @@
-"""Shared fixtures for the Agent Guard test suite.
+"""Shared fixtures for the Foldward test suite.
 
 Two autouse fixtures keep every test hermetic:
 
@@ -17,22 +17,22 @@ import types
 
 import pytest
 
-import agent_guard.cli as cli_module
-import agent_guard.config as cfg
-import agent_guard.quarantine as quarantine_module
-from agent_guard.config import Settings
-from agent_guard.core import AgentGuard
-from agent_guard.crypto import AuditLog, new_signer
-from agent_guard.integrations import cryptomigrate as cm_integ
-from agent_guard.integrations import sentinel_vision as sv_integ
+import foldward.cli as cli_module
+import foldward.config as cfg
+import foldward.quarantine as quarantine_module
+from foldward.config import Settings
+from foldward.core import Foldward
+from foldward.crypto import AuditLog, new_signer
+from foldward.integrations import cryptomigrate as cm_integ
+from foldward.integrations import sentinel_vision as sv_integ
 
 _REAL_PATH_HELPERS = {"data_root": cfg.data_root, "sub_dir": cfg.sub_dir}
 
 
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path, monkeypatch):
-    """Point every Agent Guard path at ``<tmp_path>/AgentGuard``."""
-    root = tmp_path / "AgentGuard"
+    """Point every Foldward path at ``<tmp_path>/Foldward``."""
+    root = tmp_path / "Foldward"
     root.mkdir()
 
     def data_root():
@@ -43,11 +43,11 @@ def _isolate(tmp_path, monkeypatch):
         d.mkdir(parents=True, exist_ok=True)
         return d
 
-    # agent_guard.config is the source of truth: Settings.path() and app_banner() resolve ``data_root`` through it
+    # foldward.config is the source of truth: Settings.path() and app_banner() resolve ``data_root`` through it
     # at call time...
     monkeypatch.setattr(cfg, "data_root", data_root)
     monkeypatch.setattr(cfg, "sub_dir", sub_dir)
-    # ...but a module that did ``from agent_guard.config import <name>`` holds its own reference, so patch those too.
+    # ...but a module that did ``from foldward.config import <name>`` holds its own reference, so patch those too.
     monkeypatch.setattr(quarantine_module, "sub_dir", sub_dir)
     monkeypatch.setattr(cli_module, "data_root", data_root)
 
@@ -55,7 +55,7 @@ def _isolate(tmp_path, monkeypatch):
     stray = [
         f"{mod_name}.{attr}"
         for mod_name, mod in list(sys.modules.items())
-        if mod is not None and mod_name.startswith("agent_guard")
+        if mod is not None and mod_name.startswith("foldward")
         for attr, real in _REAL_PATH_HELPERS.items()
         if getattr(mod, attr, None) is real
     ]
@@ -97,8 +97,8 @@ def audit(signer):
 
 @pytest.fixture
 def guard():
-    """A fully wired AgentGuard with default (conservative) settings and isolated storage."""
-    return AgentGuard(Settings())
+    """A fully wired Foldward with default (conservative) settings and isolated storage."""
+    return Foldward(Settings())
 
 
 @pytest.fixture

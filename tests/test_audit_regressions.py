@@ -13,18 +13,18 @@ from pathlib import Path
 import psutil
 import pytest
 
-import agent_guard.cli as cli
-import agent_guard.crypto as crypto
-import agent_guard.mesh as mesh
-from agent_guard import detect
-from agent_guard.config import Settings
-from agent_guard.core import AgentGuard
-from agent_guard.detect import DetectedAgent, Detector, ProcessInfo
-from agent_guard.identity import Scope, TrustDomain
-from agent_guard.integrations import sentinel_vision as sv_integ
-from agent_guard.quarantine import Quarantine
-from agent_guard.registry import Revocation, RevocationRegistry
-from agent_guard.response import RUNG_BY_NAME, Containment, Rung
+import foldward.cli as cli
+import foldward.crypto as crypto
+import foldward.mesh as mesh
+from foldward import detect
+from foldward.config import Settings
+from foldward.core import Foldward
+from foldward.detect import DetectedAgent, Detector, ProcessInfo
+from foldward.identity import Scope, TrustDomain
+from foldward.integrations import sentinel_vision as sv_integ
+from foldward.quarantine import Quarantine
+from foldward.registry import Revocation, RevocationRegistry
+from foldward.response import RUNG_BY_NAME, Containment, Rung
 
 ROOT = Path(__file__).resolve().parents[1]
 CREWAI = ['python', '-m', 'crewai', 'run']
@@ -67,9 +67,9 @@ def wait_for_status(pid, wanted, timeout=3.0):
 
 
 # AG-A01 / AG-F01
-def test_agent_guard_marker_does_not_hide_an_agent():
+def test_foldward_marker_does_not_hide_an_agent():
     secret = str(Path.home() / 'Documents' / 'secret.pdf')
-    proc = rogue(UNUSED_PID, [*CREWAI, '--tag', 'agent-guard'], [secret])
+    proc = rogue(UNUSED_PID, [*CREWAI, '--tag', 'foldward'], [secret])
     d = Detector(Settings())
     d.snapshot_processes = lambda: [proc]
     found = d.detect()
@@ -83,8 +83,8 @@ def test_canary_contact_trips_during_a_normal_scan(tmp_path):
     s.auto_contain_on_decoy = False  # observe only; this test must not act on anything
     bait = tmp_path / 'bait'
     bait.mkdir()
-    planted = AgentGuard(s).plant_canaries([str(bait)])  # e.g. the 'canaries' command
-    g = AgentGuard(s)  # e.g. a later 'watch' run
+    planted = Foldward(s).plant_canaries([str(bait)])  # e.g. the 'canaries' command
+    g = Foldward(s)  # e.g. a later 'watch' run
     proc = rogue(UNUSED_PID + 1, CREWAI, [planted[0]])
     g.detector.snapshot_processes = lambda: [proc]
     [res] = g.scan()
@@ -95,10 +95,10 @@ def test_canary_contact_trips_during_a_normal_scan(tmp_path):
 
 # AG-A03
 def test_state_survives_a_restart():
-    a = AgentGuard(Settings())
+    a = Foldward(Settings())
     ident = a.register_agent('researcher', Scope(allowed_hosts=frozenset({'api.anthropic.com'})), pid=4321)
     a.registry.revoke('agent-x', 'test', a.signer)
-    b = AgentGuard(Settings())
+    b = Foldward(Settings())
     assert [i.agent_id for i in b.sanctioned()] == [ident.agent_id]
     assert b.registry.is_revoked('agent-x')
     assert b.signer.public_ref == a.signer.public_ref
@@ -126,7 +126,7 @@ def test_interpreter_is_never_quarantined(tmp_path, sleeper, monkeypatch):
     exe = os.path.realpath(sys.executable)
     proc = live(sleeper)
     proc.exe, proc.cmdline = exe, [exe, str(script)]
-    g = AgentGuard(Settings())
+    g = Foldward(Settings())
     asked = []  # record what the quarantine step is asked to take; never let it touch the real interpreter
     monkeypatch.setattr(g.containment, 'quarantine_binary', lambda path, agent_id, reason: asked.append(path) or 'ok')
     g.pacify(DetectedAgent(proc.pid, 'python', proc, False, 90, [], 'flagged'), rung='quarantine')
@@ -137,7 +137,7 @@ def test_interpreter_is_never_quarantined(tmp_path, sleeper, monkeypatch):
 # AG-A06
 def test_pacify_refuses_a_reused_pid(sleeper):
     proc = live(sleeper, create_time=psutil.Process(sleeper.pid).create_time() - 1000)  # a different, older process
-    g = AgentGuard(Settings())
+    g = Foldward(Settings())
     try:
         g.pacify(DetectedAgent(proc.pid, 'python', proc, False, 90, [], 'flagged'), rung='suspend')
         assert not wait_for_status(sleeper.pid, psutil.STATUS_STOPPED, timeout=1.0), 'acted on the wrong process'
@@ -159,7 +159,7 @@ def test_own_quarantine_moves_the_file(tmp_path):
 # AG-A08
 def test_resumed_agent_is_suspended_again(sleeper):
     proc = live(sleeper)
-    g = AgentGuard(Settings())
+    g = Foldward(Settings())
     g.detector.snapshot_processes = lambda: []  # never look at the real process table in tests
     alerts = []
     g.alert_listeners.append(lambda title, text, level: alerts.append(title + ' ' + text))
@@ -324,9 +324,9 @@ def test_install_commands_never_fetch_the_unrelated_pypi_package():
             if 'pip install' not in line:
                 continue
             names = {_requirement_name(t) for t in line.split('pip install', 1)[1].split()}
-            if names & {'agent-guard', 'agent_guard'}:
+            if names & {'foldward', 'foldward'}:
                 offenders.append(f.name + ': ' + line.strip())
-    assert offenders == [], 'PyPI agent-guard is an unrelated project; install from the repository'
+    assert offenders == [], 'PyPI foldward is an unrelated project; install from the repository'
 
 
 # AG-B01
