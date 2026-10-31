@@ -134,6 +134,22 @@ footer.site a:hover { color: var(--text); }
 .mt-lg { margin-top: 1.5rem; }
 .mt-xl { margin-top: 2rem; }
 
+/* OSI layer stack (the "where it watches" section) */
+.osi { display: grid; gap: .4rem; margin: 1.3rem 0; }
+.osi-row {
+  display: grid; grid-template-columns: 2.4rem 8rem 1fr; gap: .9rem; align-items: baseline;
+  padding: .6rem .85rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+}
+.osi-row.on { border-color: var(--accent); }
+.osi-row.off { opacity: .68; }
+.osi-n { font-family: ui-monospace, Menlo, monospace; font-size: .85rem; color: var(--accent); }
+.osi-l { font-weight: 650; }
+.osi-w { color: var(--muted); font-size: .95rem; }
+@media (max-width: 40rem) {
+  .osi-row { grid-template-columns: 2.4rem 1fr; }
+  .osi-w { grid-column: 1 / -1; }
+}
+
 /* reflow */
 @media (max-width: 60rem) {
   .hero { grid-template-columns: 1fr; }
