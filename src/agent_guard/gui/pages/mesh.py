@@ -51,6 +51,26 @@ class MeshPage(Page):
         )
         sl.addSpacing(6)
         sl.addWidget(self.mixnote)
+
+        sl.addSpacing(6)
+        sl.addWidget(label("Where it watches (OSI)", obj="h2"))
+        osi = label(
+            "L7 Application · L6 Presentation · L5 Session · "
+            f"<font color='{theme.ACCENT}'><b>L4 Transport</b></font> · "
+            f"<font color='{theme.ACCENT}'><b>L3 Network</b></font> · "
+            "L2 Data link · L1 Physical",
+            wrap=True,
+        )
+        osi.setStyleSheet(f"color:{theme.MUTED};")
+        sl.addWidget(osi)
+        osi_note = label(
+            "Only L3/L4 — which endpoints an agent reaches — are read, as metadata. "
+            "Never packets or payloads; the rest of the judgment is host-level, above the stack.",
+            wrap=True,
+        )
+        osi_note.setStyleSheet(f"color:{theme.MUTED};font-size:11px;")
+        sl.addWidget(osi_note)
+
         sl.addStretch(1)
         row.addWidget(side, 2)
         self.root.addLayout(row, 1)
