@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent Guard — a containment net for autonomous AI agents</title>
-<meta name="description" content="Agent Guard holds an oversight net across your AI agents, catches rogue agent activity, and pacifies it reversibly within your own perimeter. Open source, runs on your machine, no telemetry.">
+<title>Foldward — a containment net for autonomous AI agents</title>
+<meta name="description" content="Foldward holds an oversight net across your AI agents, catches rogue agent activity, and pacifies it reversibly within your own perimeter. Open source, runs on your machine, no telemetry.">
 <meta name="color-scheme" content="dark light">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <link rel="icon" href="favicon.svg">
-<meta property="og:title" content="Agent Guard">
+<meta property="og:title" content="Foldward">
 <meta property="og:description" content="A containment net for autonomous AI agents — detect rogue agent activity and pacify it, reversibly, within your own perimeter.">
 <meta property="og:type" content="website">
 <link rel="stylesheet" href="style.css">
@@ -18,9 +18,9 @@
 <a class="skip" href="#main">Skip to content</a>
 <header class="site">
   <div class="bar">
-    <a class="brand" href="index.html" aria-label="Agent Guard home">
+    <a class="brand" href="index.html" aria-label="Foldward home">
       <svg viewBox="0 0 28 32" aria-hidden="true" focusable="false"><path d="M14 1 L26 5.5 V15 C26 23 20 29 14 31 C8 29 2 23 2 15 V5.5 Z" fill="none" stroke="#2ee6c5" stroke-width="1.6"/><circle cx="14" cy="14" r="3.2" fill="#2ee6c5"/><path d="M14 17.2 V24" stroke="#2ee6c5" stroke-width="1.4"/></svg>
-      Agent Guard
+      Foldward
     </a>
     <nav class="nav" aria-label="Primary">
       <a href="#how">How it works</a>
@@ -30,7 +30,7 @@
       <a href="#data">Your data</a>
       <a href="#limits">What it can't do yet</a>
       <a href="#get">Get it</a>
-      <a href="https://github.com/dylanckoldan-boop/Agent-Guard">Source</a>
+      <a href="https://github.com/dylanckoldan-boop/Foldward">Source</a>
     </nav>
   </div>
 </header>
@@ -41,15 +41,15 @@
       <div>
         <p class="eyebrow">Open source · runs on your machine</p>
         <h1>A containment net for autonomous AI agents</h1>
-        <p class="lede">Agent Guard holds an oversight net across your AI agents, catches rogue agent activity, and <strong>pacifies</strong> it — graduated, reversible-first containment, only ever on resources you own.</p>
+        <p class="lede">Foldward holds an oversight net across your AI agents, catches rogue agent activity, and <strong>pacifies</strong> it — graduated, reversible-first containment, only ever on resources you own.</p>
         <div class="cta">
-          <a class="btn primary" href="https://github.com/dylanckoldan-boop/Agent-Guard">View on GitHub</a>
+          <a class="btn primary" href="https://github.com/dylanckoldan-boop/Foldward">View on GitHub</a>
           <a class="btn" href="#get">Get it</a>
         </div>
       </div>
       <figure>
         <svg class="mesh" viewBox="0 0 420 420" role="img" aria-labelledby="mesh-t mesh-d">
-          <title id="mesh-t">The Agent Guard oversight mesh</title>
+          <title id="mesh-t">The Foldward oversight mesh</title>
           <desc id="mesh-d">A radial web: a consensus core at the centre, a ring of sentinel nodes that observe and vote, and agents on the outer rim — most healthy, one flagged and contained, linked to the core by a dashed line.</desc>
           <g class="m-grid">
             <circle cx="210" cy="210" r="56"/><circle cx="210" cy="210" r="104"/><circle cx="210" cy="210" r="152"/><circle cx="210" cy="210" r="192"/>
@@ -74,7 +74,7 @@
 
     <section id="how">
       <h2>One net, two threats</h2>
-      <p class="lead">An AI agent with tools and network access can go wrong two ways. Agent Guard is built to catch both with one apparatus — by not trusting the model to hold a boundary, and constraining what it can reach.</p>
+      <p class="lead">An AI agent with tools and network access can go wrong two ways. Foldward is built to catch both with one apparatus — by not trusting the model to hold a boundary, and constraining what it can reach.</p>
       <div class="two mt-md">
         <div class="panel">
           <h3>The misaligned agent</h3>
@@ -96,15 +96,15 @@
         <div class="card"><div class="n">Layer 3</div><h3>Pacify ladder</h3><p>Throttle → quarantine → revoke → suspend → terminate, climbing only as far as the threat demands, all inside your own perimeter.</p></div>
         <div class="card"><div class="n">Layer 4</div><h3>Consensus + audit</h3><p>A flag contains only after a quorum agrees (a decoy touch is self-authorizing); every step lands in a hash-chained, tamper-evident audit whose head can be post-quantum signed.</p></div>
       </div>
-      <p class="mt-lg"><a href="https://github.com/dylanckoldan-boop/Agent-Guard/blob/main/docs/ARCHITECTURE.md">Read the full architecture →</a></p>
+      <p class="mt-lg"><a href="https://github.com/dylanckoldan-boop/Foldward/blob/main/docs/ARCHITECTURE.md">Read the full architecture →</a></p>
     </section>
 
     <section id="sentinel">
       <h2>Stronger with sentinel-vision</h2>
       <div class="two">
         <div>
-          <p class="lead">Agent Guard runs fully on its own. When <a href="https://dylanckoldan-boop.github.io/sentinel-vision/">sentinel-vision</a> — a free, open-source antimalware app — is installed alongside it, the net gains hands: Agent Guard catches a category sentinel-vision can't see on its own (a rogue <em>agent</em>, judged by identity and behaviour), and can call sentinel-vision's engines to scan the binary, block egress at the OS firewall, and lock the binary in its hardened vault.</p>
-          <p class="lead">Together they cover both the hijacked/malware agent and the misaligned one — neither tool fully catches alone. Agent Guard even appears as a tab inside sentinel-vision, with no dependency in either direction.</p>
+          <p class="lead">Foldward runs fully on its own. When <a href="https://dylanckoldan-boop.github.io/sentinel-vision/">sentinel-vision</a> — a free, open-source antimalware app — is installed alongside it, the net gains hands: Foldward catches a category sentinel-vision can't see on its own (a rogue <em>agent</em>, judged by identity and behaviour), and can call sentinel-vision's engines to scan the binary, block egress at the OS firewall, and lock the binary in its hardened vault.</p>
+          <p class="lead">Together they cover both the hijacked/malware agent and the misaligned one — neither tool fully catches alone. Foldward even appears as a tab inside sentinel-vision, with no dependency in either direction.</p>
           <p><a class="btn" href="https://dylanckoldan-boop.github.io/sentinel-vision/">Visit sentinel-vision</a></p>
         </div>
         <div class="panel">
@@ -120,10 +120,10 @@
     </section>
 
     <section id="osi">
-      <h2>Where Agent Guard watches, by OSI layer</h2>
-      <p class="lead">The OSI model is the classic seven-layer picture of a network connection, built up from physical signals to the application on top. It's a precise way to say what Agent Guard does — and, just as importantly, what it doesn't. Agent Guard is a <strong>host-level</strong> overseer: it reads <em>which</em> endpoints an agent talks to and judges how the agent behaves on the machine. It is not a packet sniffer, a deep-packet-inspection box, or a TLS interceptor.</p>
-      <div class="osi" role="img" aria-label="OSI layers, showing Agent Guard observes only network and transport layer metadata">
-        <div class="osi-row off"><span class="osi-n">L7</span><span class="osi-l">Application</span><span class="osi-w">Message contents are not inspected — Agent Guard reads host behaviour, not your agents' payloads</span></div>
+      <h2>Where Foldward watches, by OSI layer</h2>
+      <p class="lead">The OSI model is the classic seven-layer picture of a network connection, built up from physical signals to the application on top. It's a precise way to say what Foldward does — and, just as importantly, what it doesn't. Foldward is a <strong>host-level</strong> overseer: it reads <em>which</em> endpoints an agent talks to and judges how the agent behaves on the machine. It is not a packet sniffer, a deep-packet-inspection box, or a TLS interceptor.</p>
+      <div class="osi" role="img" aria-label="OSI layers, showing Foldward observes only network and transport layer metadata">
+        <div class="osi-row off"><span class="osi-n">L7</span><span class="osi-l">Application</span><span class="osi-w">Message contents are not inspected — Foldward reads host behaviour, not your agents' payloads</span></div>
         <div class="osi-row off"><span class="osi-n">L6</span><span class="osi-l">Presentation</span><span class="osi-w">Not inspected</span></div>
         <div class="osi-row off"><span class="osi-n">L5</span><span class="osi-l">Session</span><span class="osi-w">Not inspected</span></div>
         <div class="osi-row on"><span class="osi-n">L4</span><span class="osi-l">Transport</span><span class="osi-w">Watched, metadata only: the ports an agent connects to, and fan-out to many peers at once</span></div>
@@ -131,13 +131,13 @@
         <div class="osi-row off"><span class="osi-n">L2</span><span class="osi-l">Data link</span><span class="osi-w">Not touched</span></div>
         <div class="osi-row off"><span class="osi-n">L1</span><span class="osi-l">Physical</span><span class="osi-w">Not touched</span></div>
       </div>
-      <p class="lead">Most of Agent Guard's judgment lives <em>above</em> the network stack, on the host: a process's signed identity and scope, the files it opens, the children it spawns, and a decoy it touches. Reading only connection metadata — never payloads — is a deliberate privacy choice as much as a scope one.</p>
+      <p class="lead">Most of Foldward's judgment lives <em>above</em> the network stack, on the host: a process's signed identity and scope, the files it opens, the children it spawns, and a decoy it touches. Reading only connection metadata — never payloads — is a deliberate privacy choice as much as a scope one.</p>
     </section>
 
     <section id="data">
       <h2>Your data stays yours</h2>
       <ul class="ticks">
-        <li><strong>Runs on your machine.</strong> No account, no cloud, no telemetry. Agent Guard never phones home.</li>
+        <li><strong>Runs on your machine.</strong> No account, no cloud, no telemetry — the watch never phones home. The one outbound connection is the opt-in <em>Check for updates</em>, which asks GitHub for the latest version when you click it and sends nothing about you.</li>
         <li><strong>On-device storage.</strong> Its signing and quarantine keys, settings and audit live in your own user data folder — nothing is uploaded.</li>
         <li><strong>Open source (MIT).</strong> Every line is auditable, and correctness is established by the test suite, not by assertion.</li>
         <li><strong>This website</strong> is plain HTML and CSS: no JavaScript, no cookies, no analytics, nothing loaded from other servers.</li>
@@ -146,10 +146,10 @@
     </section>
 
     <section id="limits">
-      <h2>What Agent Guard can't do yet</h2>
+      <h2>What Foldward can't do yet</h2>
       <p class="lead">It is v0.x research software, shared in the open so its limits are as visible as its design. Being honest about these is part of the point.</p>
       <ul class="ticks">
-        <li><strong>It runs as you.</strong> Agent Guard has your privileges, not more. An agent running with your rights can interfere with it; it is oversight, not a sandbox or a kernel-level guard.</li>
+        <li><strong>It runs as you.</strong> Foldward has your privileges, not more. An agent running with your rights can interfere with it; it is oversight, not a sandbox or a kernel-level guard.</li>
         <li><strong>Detection is heuristic.</strong> The first-pass net scores processes on identity, reach and behaviour, and a determined agent can evade it. The decoy layer lures and signals; it is not safety-rated.</li>
         <li><strong>It acts only on this computer.</strong> Containment is confined to resources you own — deny, revoke, isolate, suspend. It never reaches into an agent's own infrastructure.</li>
         <li><strong>Some features need a partner or an OS privilege.</strong> Blocking egress at the firewall and the tamper-proof containment log come from sentinel-vision when it is installed; process control needs the rights to signal the target.</li>
@@ -161,18 +161,18 @@
     <section id="get">
       <h2>Get it</h2>
       <p class="lead">Python 3.10+. The core needs only <code>psutil</code> and <code>cryptography</code>; add the desktop app with the <code>gui</code> extra.</p>
-      <pre><code>git clone https://github.com/dylanckoldan-boop/Agent-Guard
-cd Agent-Guard
+      <pre><code>git clone https://github.com/dylanckoldan-boop/Foldward
+cd Foldward
 pip install -e ".[gui]"
 
-agent-guard-cli status     # the command line
-agent-guard                # the desktop app</code></pre>
-      <p><a class="btn primary" href="https://github.com/dylanckoldan-boop/Agent-Guard">View the source on GitHub</a></p>
+foldward-cli status     # the command line
+foldward                # the desktop app</code></pre>
+      <p><a class="btn primary" href="https://github.com/dylanckoldan-boop/Foldward">View the source on GitHub</a></p>
     </section>
 
     <section id="built">
       <h2>How this was built</h2>
-      <p class="lead">Agent Guard is designed and maintained by Dylan C. Koldan, who built it with AI assistance (Anthropic's Claude) under his direction. Every change is run through the automated test suite, and the maintainer is responsible for all of it. Agent Guard itself contains no AI model and sends nothing to any AI service: it watches AI agents on your computer; it is not one.</p>
+      <p class="lead">Foldward is designed and maintained by Dylan C. Koldan, who built it with AI assistance (Anthropic's Claude) under his direction. Every change is run through the automated test suite, and the maintainer is responsible for all of it. Foldward itself contains no AI model and sends nothing to any AI service: it watches AI agents on your computer; it is not one.</p>
       <p class="lead">Anthropic and Claude are trademarks of Anthropic; this project is not affiliated with or endorsed by Anthropic.</p>
     </section>
 
@@ -194,14 +194,14 @@ agent-guard                # the desktop app</code></pre>
 <footer class="site">
   <div class="wrap">
     <div class="flinks">
-      <a href="https://github.com/dylanckoldan-boop/Agent-Guard">Source code</a>
+      <a href="https://github.com/dylanckoldan-boop/Foldward">Source code</a>
       <a href="#built">How it's built</a>
-      <a href="https://github.com/dylanckoldan-boop/Agent-Guard/security/advisories/new">Report a vulnerability</a>
+      <a href="https://github.com/dylanckoldan-boop/Foldward/security/advisories/new">Report a vulnerability</a>
       <a href="privacy.html">Privacy</a>
       <a href="terms.html">Terms</a>
       <a href="https://dylanckoldan-boop.github.io/sentinel-vision/">sentinel-vision</a>
     </div>
-    <p>Agent Guard is a research project. The deception layers are not safety-rated; the guarantees live in the pacify ladder, the signed registry and the independent controls. MIT licensed · © 2026 Dylan C. Koldan.</p>
+    <p>Foldward is a research project. The deception layers are not safety-rated; the guarantees live in the pacify ladder, the signed registry and the independent controls. MIT licensed · © 2026 Dylan C. Koldan.</p>
   </div>
 </footer>
 </body>

@@ -1,4 +1,4 @@
-"""A runnable, self-contained demonstration of Agent Guard's layers.
+"""A runnable, self-contained demonstration of Foldward's layers.
 
 No live processes and no partners required — it drives the engine directly with
 synthetic agents so you can watch the net catch and pacify a rogue agent, and
@@ -14,11 +14,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent_guard.config import Settings
-from agent_guard.core import AgentGuard
-from agent_guard.detect import DetectedAgent, ProcessInfo, Reason
-from agent_guard.identity import Scope
-from agent_guard.registry import Revocation
+from foldward.config import Settings
+from foldward.core import Foldward
+from foldward.detect import DetectedAgent, ProcessInfo, Reason
+from foldward.identity import Scope
+from foldward.registry import Revocation
 
 
 def rule(title: str) -> None:
@@ -26,7 +26,7 @@ def rule(title: str) -> None:
 
 
 def main() -> None:
-    g = AgentGuard(Settings())
+    g = Foldward(Settings())
     g.alert_listeners.append(lambda t, x, l: print(f"   · [{l}] {t}: {x}"))
 
     rule("1. Admission — a sanctioned, least-privilege agent")

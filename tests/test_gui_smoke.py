@@ -13,8 +13,8 @@ from importlib.metadata import PackageNotFoundError, distribution
 
 import pytest
 
-from agent_guard.detect import DetectedAgent, ProcessInfo, Reason
-from agent_guard.mesh import MeshSnapshot
+from foldward.detect import DetectedAgent, ProcessInfo, Reason
+from foldward.mesh import MeshSnapshot
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"  # headless; must be set before PySide6 / the gui are imported
 
@@ -22,9 +22,9 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"  # headless; must be set before PySi
 pytest.importorskip("PySide6")
 qt_widgets = pytest.importorskip("PySide6.QtWidgets")
 shiboken6 = pytest.importorskip("shiboken6")
-plugin = pytest.importorskip("agent_guard.gui.plugin")
-MainWindow = pytest.importorskip("agent_guard.gui.app").MainWindow
-NAV = pytest.importorskip("agent_guard.gui.pages").NAV
+plugin = pytest.importorskip("foldward.gui.plugin")
+MainWindow = pytest.importorskip("foldward.gui.app").MainWindow
+NAV = pytest.importorskip("foldward.gui.pages").NAV
 QApplication, QWidget = qt_widgets.QApplication, qt_widgets.QWidget
 
 KEYS = [key for key, _label, _page in NAV]
@@ -95,7 +95,7 @@ def test_every_page_navigates_and_refreshes(window, key):
 def test_main_window_has_a_page_and_a_sidebar_button_for_every_nav_entry(window):
     assert list(window.pages) == KEYS
     assert list(window.buttons) == KEYS
-    assert window.windowTitle() == "Agent Guard"
+    assert window.windowTitle() == "Foldward"
 
 
 def test_pages_paint_without_error(window):
@@ -179,7 +179,7 @@ def test_settings_toggles_are_saved_to_the_isolated_settings_file(window, tmp_pa
 
     assert window.guard.settings.auto_contain_on_decoy is False
     assert window.guard.mix.enabled is False
-    saved = json.loads((tmp_path / "AgentGuard" / "settings.json").read_text("utf-8"))
+    saved = json.loads((tmp_path / "Foldward" / "settings.json").read_text("utf-8"))
     assert saved["auto_contain_on_decoy"] is False
     assert saved["mix_oversight_traffic"] is False
 
@@ -236,11 +236,11 @@ def test_a_host_without_notify_or_navigate_is_tolerated(track):
 
 def test_plugin_is_advertised_on_the_sentinel_vision_entry_point_group():
     try:
-        dist = distribution("agent-guard")
+        dist = distribution("foldward")
     except PackageNotFoundError:
-        pytest.skip("agent-guard is not installed, so there is no entry-point metadata to inspect")
+        pytest.skip("foldward is not installed, so there is no entry-point metadata to inspect")
 
-    [ep] = [e for e in dist.entry_points if e.group == "sentinel_vision.plugins" and e.name == "agent_guard"]
+    [ep] = [e for e in dist.entry_points if e.group == "sentinel_vision.plugins" and e.name == "foldward"]
 
-    assert ep.value == "agent_guard.gui.plugin:register"
+    assert ep.value == "foldward.gui.plugin:register"
     assert ep.load() is plugin.register

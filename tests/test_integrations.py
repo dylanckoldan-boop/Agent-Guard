@@ -13,11 +13,11 @@ import types
 
 import pytest
 
-from agent_guard.config import Settings
-from agent_guard.core import AgentGuard
-from agent_guard.integrations import PartnerStatus, cryptomigrate, partner_status, sentinel_vision
-from agent_guard.quarantine import Quarantine
-from agent_guard.response import Containment
+from foldward.config import Settings
+from foldward.core import Foldward
+from foldward.integrations import PartnerStatus, cryptomigrate, partner_status, sentinel_vision
+from foldward.quarantine import Quarantine
+from foldward.response import Containment
 
 
 def attestation_payload(att: dict) -> bytes:
@@ -91,7 +91,7 @@ def test_attestation_is_self_signed_without_cryptomigrate(signer):
 
     att = cryptomigrate.CryptomigrateAdapter().attest(state, signer)
 
-    assert att["notary"] == "agent-guard"
+    assert att["notary"] == "foldward"
     assert att["state"] == state
     assert att["signer_ref"] == signer.public_ref
     assert signer.verifier().verify(attestation_payload(att), att["signature"])
@@ -108,7 +108,7 @@ def test_the_guard_runs_standalone_with_no_partners(guard):
     assert guard.partners.sentinel_vision is False
     assert guard.partners.cryptomigrate is False
     assert type(guard.containment) is Containment
-    assert guard.attest()["notary"] == "agent-guard"
+    assert guard.attest()["notary"] == "foldward"
 
 
 # ----------------------------------------------------------------- partners present
@@ -134,7 +134,7 @@ def test_partners_on_path_are_detected_through_their_cli(monkeypatch):
 def test_the_guard_swaps_in_sentinel_vision_containment_when_it_is_present(monkeypatch):
     monkeypatch.setitem(sys.modules, "sentinel_vision", types.ModuleType("sentinel_vision"))
 
-    g = AgentGuard(Settings())
+    g = Foldward(Settings())
 
     assert g.partners.sentinel_vision is True
     assert isinstance(g.containment, Containment)
@@ -203,7 +203,7 @@ def test_sentinel_vision_containment_hands_binaries_to_its_vault(sv_cli, tmp_pat
 
     assert detail.startswith("handed to sentinel-vision vault")
     assert sv_cli.calls == [["/opt/sv/sentinel-vision-cli", "quarantine", "add", str(binary), "--reason", "pacified"]]
-    assert len(own_vault) == 0  # sentinel-vision is the system of record, not Agent Guard's own store
+    assert len(own_vault) == 0  # sentinel-vision is the system of record, not Foldward's own store
 
 
 def test_sentinel_vision_containment_falls_back_to_the_own_vault_when_the_verb_is_missing(sv_cli, tmp_path):
@@ -267,7 +267,7 @@ def test_pacify_mirrors_a_record_to_the_protected_log_when_present(guard):
 
 def test_plugin_pages_are_namespaced_to_avoid_host_key_collisions():
     pytest.importorskip("PySide6")
-    from agent_guard.gui.plugin import register
+    from foldward.gui.plugin import register
 
     pages = register()
     keys = [p.key for p in pages]

@@ -6,8 +6,8 @@ import dataclasses
 
 import pytest
 
-from agent_guard.crypto import new_signer
-from agent_guard.identity import Credential, Scope, TrustDomain, verify_credential
+from foldward.crypto import new_signer
+from foldward.identity import Credential, Scope, TrustDomain, verify_credential
 
 SCOPE = Scope(
     allowed_actions=frozenset({"read_logs", "summarize"}),

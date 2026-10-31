@@ -1,4 +1,4 @@
-# Code owners for Agent Guard.
+# Code owners for Foldward.
 # These owners are requested for review on changes to the paths below. Enforcement
 # (required review) depends on branch-protection settings — see docs/REPO_SETTINGS.md.
 
@@ -8,4 +8,4 @@
 # Security-sensitive areas, called out explicitly.
 /.github/             @dylanckoldan-boop
 /site/                @dylanckoldan-boop
-/src/agent_guard/     @dylanckoldan-boop
+/src/foldward/     @dylanckoldan-boop

@@ -19,7 +19,7 @@ env/
 .idea/
 .DS_Store
 
-# local Agent Guard state (should never be committed)
+# local Foldward state (should never be committed)
 *.key
 settings.json
 quarantine/

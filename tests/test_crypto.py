@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-from agent_guard import crypto
-from agent_guard.crypto import (
+from foldward import crypto
+from foldward.crypto import (
     AuditLog,
     HybridSigner,
     SignatureError,

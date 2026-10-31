@@ -21,7 +21,7 @@ at **&lt;security contact — owner to set&gt;**.
 
 ### Supported versions
 
-Agent Guard is pre-1.0; only the latest release receives security fixes.
+Foldward is pre-1.0; only the latest release receives security fixes.
 
 | Version | Supported |
 |--------:|:---------:|
@@ -30,18 +30,18 @@ Agent Guard is pre-1.0; only the latest release receives security fixes.
 
 ## Scope and posture
 
-Agent Guard is a research-stage project (v0.x). The deception layers (the glamour
+Foldward is a research-stage project (v0.x). The deception layers (the glamour
 and the tripwire) are **not** safety-rated; the guarantees live in the pacify
 ladder, the signed revocation registry, and the independent controls — never in
 an agent staying fooled. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-Agent Guard contains rogue agents only on resources the defender owns (deny,
+Foldward contains rogue agents only on resources the defender owns (deny,
 revoke, isolate, suspend). It never reaches into an agent's own infrastructure —
 that "hack-back" is out of scope by design.
 
 ## Good to know
 
-- **No secrets in the repo, all state on-device.** Agent Guard's settings, its
+- **No secrets in the repo, all state on-device.** Foldward's settings, its
   circle signing key, the agents you register, the revocation registry, the
   hash-chained audit and the quarantine store (with its key) all live in your own
   per-user data directory, readable only by you. Nothing is uploaded, and nothing

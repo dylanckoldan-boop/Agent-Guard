@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from agent_guard.align import ALIGNMENT_RULES, DEFAULT_ALIGNMENT, RULE_KEYS, enabled
-from agent_guard.config import Settings
-from agent_guard.detect import ProcessInfo, score_agent
+from foldward.align import ALIGNMENT_RULES, DEFAULT_ALIGNMENT, RULE_KEYS, enabled
+from foldward.config import Settings
+from foldward.detect import ProcessInfo, score_agent
 
 
 def _proc(**kw) -> ProcessInfo:

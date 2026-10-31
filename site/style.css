@@ -1,4 +1,4 @@
-/* Agent Guard website — plain CSS, no JavaScript, no third-party requests.
+/* Foldward website — plain CSS, no JavaScript, no third-party requests.
    Dark by default (matching the app), light under prefers-color-scheme: light. */
 :root {
   --bg: #0b1016;

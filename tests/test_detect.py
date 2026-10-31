@@ -7,9 +7,9 @@ import types
 
 import pytest
 
-from agent_guard import detect as detect_module
-from agent_guard.config import Settings
-from agent_guard.detect import (
+from foldward import detect as detect_module
+from foldward.config import Settings
+from foldward.detect import (
     DetectedAgent,
     Detector,
     ProcessInfo,
@@ -17,8 +17,8 @@ from agent_guard.detect import (
     looks_like_agent,
     score_agent,
 )
-from agent_guard.identity import Scope
-from agent_guard.mesh import DEFAULT_SENTINELS
+from foldward.identity import Scope
+from foldward.mesh import DEFAULT_SENTINELS
 
 
 def make_proc(**overrides) -> ProcessInfo:
@@ -253,10 +253,10 @@ def test_detector_ignores_processes_that_are_not_agents(detector_for):
     assert [d.pid for d in found] == [11]
 
 
-def test_detector_never_flags_agent_guard_itself(detector_for):
+def test_detector_never_flags_foldward_itself(detector_for):
     me = make_proc(pid=os.getpid(), cmdline=["python", "langchain_agent.py"])
-    module = make_proc(pid=11, cmdline=["python", "-m", "agent_guard", "watch"])
-    script = make_proc(pid=12, cmdline=["agent-guard", "scan"])
+    module = make_proc(pid=11, cmdline=["python", "-m", "foldward", "watch"])
+    script = make_proc(pid=12, cmdline=["foldward", "scan"])
 
     assert detector_for(me, module, script).detect() == []
 
