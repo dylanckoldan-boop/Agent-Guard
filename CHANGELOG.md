@@ -4,6 +4,14 @@ All notable changes to Foldward are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/). Audit finding IDs are in brackets.
 
+## [Unreleased]
+
+### Release
+- A release can be started from Actions → Release → Run workflow → Publish, which creates the
+  tag on `main` itself; pushing a `vX.Y.Z` tag still works.
+- Each release is also uploaded to PyPI through trusted publishing, after the GitHub release is
+  approved, so `foldward` on PyPI is this project and no PyPI token is stored anywhere.
+
 ## [0.2.0] - 2026-10-31
 
 This release closes the findings of the 31 October 2026 audit and makes Foldward's
