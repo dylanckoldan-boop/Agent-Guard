@@ -32,7 +32,7 @@ The layers work independently, so one failing doesn't switch off the others. All
 
 ```bash
 # a released version, pinned to its tag (never whatever main holds that minute)
-pip install "foldward[gui] @ git+https://github.com/dylanckoldan-boop/Foldward@v0.2.0"
+pip install "foldward[gui] @ git+https://github.com/dylanckoldan-boop/Foldward@v0.2.1"
 
 # or, to work on the code
 git clone https://github.com/dylanckoldan-boop/Foldward && cd Foldward

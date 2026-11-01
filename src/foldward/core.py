@@ -383,6 +383,7 @@ class Foldward:
                 self._note_canary_contact(d)  # a touched canary is a decoy hit (AG-A02)
                 self._evaluate(d)
             self._sweep_canaries({d.pid for d in detections})
+            self._check_canaries()
             self._detections = detections
             return detections
 
@@ -416,6 +417,17 @@ class Foldward:
                 d.reasons = [Reason("touched a decoy / honeytoken", 100, "tripwire")]
                 d.state = "flagged"
                 return
+
+    def _check_canaries(self) -> None:
+        """Report a canary that was deleted, replaced or changed. Reading one changes
+        none of that, so a change means something touched the bait (AG-N07)."""
+        for _decoy_id, path, change in self.tripwire.check_integrity():
+            self._alert(
+                "A canary was tampered with",
+                f"{path} was {change}. Something handled the bait; check which programs ran, then delete "
+                "the file and plant the canaries again if the change was yours.",
+                "danger",
+            )
 
     def _sweep_canaries(self, candidates: set[int]) -> None:
         """Report canary contact by programs that are not agent candidates — an

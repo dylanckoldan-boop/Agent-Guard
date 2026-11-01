@@ -37,4 +37,4 @@ __all__ = ["APP_NAME", "APP_SLUG", "__version__"]
 
 APP_NAME = "Foldward"
 APP_SLUG = "foldward"
-__version__ = "0.2.0"
+__version__ = "0.2.1"

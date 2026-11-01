@@ -5,8 +5,8 @@ sentinel-vision's own contract is in that project's
 [`docs/PLUGINS.md`](https://github.com/dylanckoldan-boop/sentinel-vision/blob/main/docs/PLUGINS.md),
 and its machine-readable form, [`docs/plugin-contract.json`](https://github.com/dylanckoldan-boop/sentinel-vision/blob/main/docs/plugin-contract.json),
 is copied into this repository as `tests/data/sentinel_vision_contract.json` and replayed
-by `tests/test_sentinel_vision_contract.py`. Foldward 0.2.0 needs sentinel-vision
-0.5.2 or newer: 0.5.1 has no exit code 3, and on Python 3.10, 3.11 and early 3.12 it
+by `tests/test_sentinel_vision_contract.py`. Foldward 0.2.0 and later need
+sentinel-vision 0.5.2 or newer: 0.5.1 has no exit code 3, and on Python 3.10, 3.11 and early 3.12 it
 can't parse `quarantine add --reason TEXT -- PATH`.
 
 The rule in both directions: **neither project depends on the other.** Foldward
@@ -62,7 +62,7 @@ checks their permissions before loading. Install a **tagged release** from an
 administrator terminal, with a Python matching the app (3.12):
 
 ```
-py -3.12 -m pip install --target "C:\Program Files\Sentinel Vision\plugins\foldward" "foldward @ git+https://github.com/dylanckoldan-boop/Foldward@v0.2.0"
+py -3.12 -m pip install --target "C:\Program Files\Sentinel Vision\plugins\foldward" "foldward @ git+https://github.com/dylanckoldan-boop/Foldward@v0.2.1"
 ```
 
 Install a tag from the repository, never the moving `main` branch and never a

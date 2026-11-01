@@ -36,6 +36,7 @@ import hashlib
 import json
 import os
 import secrets
+import stat
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -80,7 +81,7 @@ class PlantedCanary:
     ino: int
     sha256: str
     planted_at: float
-    ctime_ns: int = 0  # changes when the file is replaced, even if the file system reuses the inode number
+    ctime_ns: int = 0  # as planted: a later difference means the canary was changed or replaced
 
 
 def _key(path: str | os.PathLike[str]) -> str:
@@ -99,6 +100,7 @@ class Tripwire:
         self._audit = audit
         self._decoys: dict[str, Decoy] = {}
         self._planted: dict[str, PlantedCanary] = {}  # normalized path -> what was planted there
+        self._tamper_seen: dict[str, str] = {}  # normalized path -> the last change reported
         self.events: list[TripEvent] = []
         self.observed: list[TripEvent] = []  # contact by programs that aren't agent candidates
         # With a path, the planted list is durable, so a later run (the CLI after the
@@ -208,20 +210,51 @@ class Tripwire:
     def is_canary(self, path: str) -> str | None:
         """Return the decoy id if ``path`` is a canary this install planted, else None.
 
-        The path must be one Foldward planted AND still be the same file (device, inode /
-        file ID and change time, so a new file that happens to reuse the inode number
-        doesn't count). Reading a canary doesn't change any of them. The file is never opened, so a FIFO or a slow network path
-        can't stall a scan, and a marker line copied into another file is ignored."""
+        A path counts when this install planted a canary there and it is still a
+        regular file. Its metadata doesn't matter: a program that changes a canary's
+        times or permissions before reading it still trips the wire (AG-N07), and
+        :meth:`check_integrity` reports the change. The file is never opened, so a
+        FIFO or a slow network path can't stall a scan, and a marker line copied into
+        another file is ignored."""
         rec = self._planted.get(_key(path))
         if rec is None:
             return None
         try:
-            st = os.stat(path)
+            st = os.lstat(path)
         except OSError:
             return None
-        if (st.st_dev, st.st_ino, st.st_ctime_ns) != (rec.dev, rec.ino, rec.ctime_ns):
-            return None  # replaced by another file: no longer our bait
+        if not stat.S_ISREG(st.st_mode):
+            return None  # a link, folder or pipe put in its place is never "the bait"
         return rec.decoy_id
+
+    def check_integrity(self) -> list[tuple[str, str, str]]:
+        """Canaries that were deleted, replaced or changed since they were planted, as
+        (decoy id, path, what happened); each change is returned once. Nothing is
+        opened. Reading a canary changes none of this, so any change means something
+        touched the bait."""
+        changes: list[tuple[str, str, str]] = []
+        for key, rec in self._planted.items():
+            try:
+                st = os.lstat(rec.path)
+            except FileNotFoundError:
+                state = "deleted"
+            except OSError as exc:
+                state = f"can't be checked ({exc.strerror})"
+            else:
+                if not stat.S_ISREG(st.st_mode):
+                    state = "replaced by something that isn't a regular file"
+                elif (st.st_dev, st.st_ino) != (rec.dev, rec.ino):
+                    state = "replaced by another file"
+                elif rec.ctime_ns and st.st_ctime_ns != rec.ctime_ns:
+                    state = "changed (its contents, permissions or times)"
+                else:
+                    state = ""
+            if state and self._tamper_seen.get(key) != state:
+                changes.append((rec.decoy_id, rec.path, state))
+                if self._audit is not None:
+                    self._audit.append("tripwire.tampered", {"decoy": rec.decoy_id, "path": rec.path, "change": state})
+            self._tamper_seen[key] = state
+        return changes
 
     # -- contact ------------------------------------------------------------
     def on_contact(self, agent_id: str, decoy_id: str, pid: int | None = None, detail: str = "") -> TripEvent:

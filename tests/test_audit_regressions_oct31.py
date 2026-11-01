@@ -262,7 +262,7 @@ def test_a_marker_copied_into_another_file_is_not_a_canary(tmp_path):
     assert Tripwire().is_canary(str(f)) is None
 
 
-def test_a_replaced_canary_is_no_longer_recognised(tmp_path):
+def test_a_replaced_canary_still_trips_and_is_reported(tmp_path):
     tw = Tripwire()
     bait = tmp_path / "bait"
     bait.mkdir()
@@ -270,7 +270,62 @@ def test_a_replaced_canary_is_no_longer_recognised(tmp_path):
     os.unlink(planted)
     Path(planted).write_bytes(b"someone else's file")  # same path, different file
 
+    assert tw.is_canary(planted)  # whoever opens the planted path still trips the wire
+    [(_, path, change)] = tw.check_integrity()
+    assert path == planted and change in ("replaced by another file", "changed (its contents, permissions or times)")
+
+
+# ------------------------------------------------------------------ AG-N07: touching a canary can't disarm it
+@posix_only
+@pytest.mark.parametrize("touch", ["os.utime(CANARY)", "os.chmod(CANARY, 0o644)"])
+def test_an_agent_that_touches_a_canary_before_reading_it_is_still_contained(tmp_path, spawn, canary, touch):
+    g, bait = canary
+    alerts: list[tuple[str, str, str]] = []
+    g.alert_listeners.append(lambda *a: alerts.append(a))
+    script = tmp_path / "rogue.py"
+    text = f"import os, time\n{touch.replace('CANARY', repr(str(bait)))}\n" + _holder(bait)
+    p = spawn(["python3", str(script), "--framework", "crewai"], script, text)
+    _wait_open(p.pid, bait)
+
+    [d] = [x for x in g.scan() if x.pid == p.pid]
+
+    assert d.state == "contained"
+    assert _status(p.pid) == psutil.STATUS_STOPPED
+    assert any(title == "A canary was tampered with" for title, _text, _level in alerts)
+
+
+def test_canary_changes_are_reported_once_each(tmp_path):
+    tw = Tripwire()
+    bait = tmp_path / "bait"
+    bait.mkdir()
+    planted = tw.plant_canaries([str(bait)])[0]
+    assert tw.check_integrity() == []  # untouched
+
+    st = os.stat(planted)
+    os.utime(planted, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))  # metadata only: ctime moves on
+    [(_, _, change)] = tw.check_integrity()
+    assert change.startswith("changed")
+    assert tw.check_integrity() == []  # the same change isn't reported again
+    assert tw.is_canary(planted)  # and the canary still counts
+
+    os.unlink(planted)
+    [(_, _, change)] = tw.check_integrity()
+    assert change == "deleted"
     assert tw.is_canary(planted) is None
+
+
+@posix_only
+def test_a_canary_swapped_for_a_pipe_is_reported_and_never_opened(tmp_path):
+    tw = Tripwire()
+    bait = tmp_path / "bait"
+    bait.mkdir()
+    planted = tw.plant_canaries([str(bait)])[0]
+    os.unlink(planted)
+    os.mkfifo(planted)  # opening it would block a scan
+
+    assert tw.is_canary(planted) is None
+    [(_, _, change)] = tw.check_integrity()
+    assert change == "replaced by something that isn't a regular file"
 
 
 def test_canaries_planted_by_one_run_are_recognised_by_the_next(tmp_path):

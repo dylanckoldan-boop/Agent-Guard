@@ -37,7 +37,7 @@ Defense in depth: defeating any one layer still leaves the next.
 | Layer | Name | Role | Module |
 |------:|------|------|--------|
 | 1 | **Admission** | Agents you sanction carry signed, least-privilege identity, checked against the revocation registry. An unregistered agent is flagged, not blocked. | `identity.py` |
-| 2 | **The net (tripwire)** | No legitimate workflow opens a planted decoy, so contact *is* an intrusion — a near-zero-false-positive signal, since only the bait trips the wire. | `tripwire.py`, `detect.py` |
+| 2 | **The net (tripwire)** | No normal workflow opens a planted decoy, so an agent's contact is treated as an intrusion; other programs that open one (antivirus, backup) are reported, never contained, and a decoy that is changed or replaced raises an alert. | `tripwire.py`, `detect.py` |
 | 3 | **Pacify ladder** | throttle → quarantine → revoke → suspend → terminate, climbing only as far as the threat demands, all inside our own perimeter. | `response.py` |
 | 4 | **Consensus + audit** | A flag contains only after an in-process quorum agrees (a decoy touch is self-authorizing); every step lands in a hash-chained, tamper-evident log whose head can be PQ-signed. | `mesh.py`, `crypto.py`, `registry.py` |
 
