@@ -24,8 +24,12 @@ any change to who has access, and at each quarterly review.
 
 ## Deploy environments
 - [ ] `github-pages`: Settings → Environments → `github-pages` → Deployment branches: `main` only.
-- [ ] `release` (created by the first run of `.github/workflows/release.yml`; create it by hand
-      before the first tag): Required reviewers: you; Deployment branches and tags: tags matching `v*`.
+- [ ] `release` (create it by hand before the first release, or the first run creates it unprotected):
+      Required reviewers: you; Deployment branches and tags: `main` and tags matching `v*` (`main` is
+      needed for Actions → Release → Run workflow → Publish, which creates the tag itself).
+- [ ] `pypi` (used by the release workflow's PyPI upload): Deployment branches and tags: `main` and tags
+      matching `v*`, so a workflow run from any other branch can't use the PyPI publisher. Required
+      reviewers are optional: the `release` approval comes first.
 
 ## Security features (Settings → Code security)
 - [x] Private vulnerability reporting **on** (so the "Report a vulnerability" links work).
@@ -37,7 +41,10 @@ any change to who has access, and at each quarterly review.
 - [ ] Two-factor authentication **on** for the owner account, with a security key or passkey.
 - [x] `SECURITY.md` fallback contact: no address needed; people without private reporting open an
       issue titled "Security contact request" and get a private channel.
-- [ ] Claim the name `foldward` on PyPI (see `docs/NAME_CLEARANCE.md`).
+- [ ] Claim the name `foldward` on PyPI through trusted publishing (see `docs/NAME_CLEARANCE.md`):
+      pypi.org → Your account → Publishing → add a pending publisher: project `foldward`, owner
+      `dylanckoldan-boop`, repository `foldward`, workflow `release.yml`, environment `pypi`. The next
+      release uploads the package and the name is yours.
 
 ## Verifying it worked
 - [ ] A test pull request that fails CI or CodeQL cannot be merged.

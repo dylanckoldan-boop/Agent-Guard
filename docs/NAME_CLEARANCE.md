@@ -46,12 +46,13 @@ Palisade Research), which is why a distinctive coined compound was chosen.
 
 ## Still to do (owner)
 
-- **Claim `foldward` on PyPI** (checked 31 Oct 2026: still unregistered). Until it is
+- **Claim `foldward` on PyPI** (checked 1 Nov 2026: still unregistered). Until it is
   claimed, anyone can publish a package under the name, and a `pip install foldward`
-  typed by a person — or invented by an AI assistant — would install it. A first
-  release with PyPI trusted publishing, or at least an account-owned placeholder,
-  closes that gap. Until then every install command names a tagged release of
-  this repository.
+  typed by a person — or invented by an AI assistant — would install it. The release
+  workflow uploads each release to PyPI through trusted publishing (no token stored
+  anywhere) once you add the pending publisher listed in `docs/REPO_SETTINGS.md`; a
+  pending publisher doesn't reserve the name, the first upload does. Until then
+  every install command names a tagged release of this repository.
 
 ## Integration note (sentinel-vision)
 
