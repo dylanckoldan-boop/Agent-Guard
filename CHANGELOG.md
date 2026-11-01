@@ -4,13 +4,14 @@ All notable changes to Foldward are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/). Audit finding IDs are in brackets.
 
-## [Unreleased]
+## [0.2.1] - 2026-11-01
 
-### Release
-- A release can be started from Actions → Release → Run workflow → Publish, which creates the
-  tag on `main` itself; pushing a `vX.Y.Z` tag still works.
-- Each release is also uploaded to PyPI through trusted publishing, after the GitHub release is
-  approved, so `foldward` on PyPI is this project and no PyPI token is stored anywhere.
+### Security
+- Changing a canary's times or permissions before reading it no longer disarms it. 0.2.0's
+  fix for forged markers also required the canary's change time to be unchanged, so one
+  `touch` or `chmod` let a rogue agent read the bait unseen. A canary now counts as long as it
+  is a regular file at a path this install planted, and a canary that is changed, replaced or
+  deleted raises an alert, because reading one changes none of that [AG-N07].
 
 ## [0.2.0] - 2026-10-31
 
@@ -68,6 +69,9 @@ together with it); older versions are reported by `status` and not used.
   signed with Foldward's circle key whether or not cryptomigrate is installed [AG-C01].
 
 ### Supply chain and release
+- A release can be started from Actions → Release → Run workflow → Publish, which creates the
+  tag on `main` itself; pushing a `vX.Y.Z` tag still works. Each release is also uploaded to
+  PyPI through trusted publishing once its publisher is set up, so no PyPI token is stored.
 - CI installs from hash-locked requirements (`requirements/*.lock`), runs ruff with its
   security rules, and fails on a known-vulnerable locked dependency [AG-A10].
 - New `release.yml`: a `vX.Y.Z` tag builds the wheel and source archive with
