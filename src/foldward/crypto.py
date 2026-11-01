@@ -34,6 +34,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from foldward.osutil import write_private
+
 try:  # strong classical signatures — present wherever `cryptography` is installed
     from cryptography.hazmat.primitives.asymmetric import ed25519
 
@@ -47,6 +49,11 @@ try:  # post-quantum signatures — present on recent `cryptography` builds
     _HAVE_MLDSA = True
 except Exception:  # pragma: no cover
     _HAVE_MLDSA = False
+
+
+def post_quantum_available() -> bool:
+    """True when this `cryptography` build can make ML-DSA-65 signatures."""
+    return _HAVE_MLDSA and _HAVE_ED25519
 
 
 class SignatureError(ValueError):
@@ -324,6 +331,10 @@ class AuditLog:
     def __init__(self, signer: Signer | None = None, path: Path | None = None) -> None:
         self._entries: list[AuditEntry] = []
         self._signer = signer
+        # Set when the saved log couldn't be read: what went wrong and where the
+        # unreadable file was kept (AG-N05). The owner of the log reports it.
+        self.load_problem: str | None = None
+        self.kept_as: str | None = None
         # When a path is given the chain is durable: it is loaded on construction
         # and rewritten after every append, so the tamper-evident log survives a
         # restart (AG-A03). With no path the log is in-memory (the default used by
@@ -334,28 +345,39 @@ class AuditLog:
 
     def _load(self) -> None:
         try:
-            raw = json.loads(self._path.read_text("utf-8"))
-        except (OSError, ValueError):
+            text = self._path.read_text("utf-8")
+        except FileNotFoundError:
             return
-        if not isinstance(raw, list):
+        except OSError as exc:
+            self.load_problem = f"the audit log couldn't be read: {exc}"
             return
-        restored: list[AuditEntry] = []
-        for e in raw:
+        try:
+            raw = json.loads(text)
+            if not isinstance(raw, list):
+                raise ValueError("not a list of entries")
+            restored = [
+                AuditEntry(int(e["seq"]), float(e["ts"]), str(e["event"]), dict(e["data"]),
+                           str(e["prev_hash"]), str(e["this_hash"]))
+                for e in raw
+            ]
+        except (ValueError, KeyError, TypeError) as exc:
+            # Never discard evidence silently: keep the unreadable file beside the
+            # new log and report it, then start a fresh chain (AG-N05).
+            self.load_problem = f"the saved audit log was unreadable ({exc}); a new log was started"
+            kept = self._path.with_name(f"{self._path.stem}.corrupt-{time.strftime('%Y%m%d-%H%M%S')}.json")
             try:
-                restored.append(
-                    AuditEntry(e["seq"], e["ts"], e["event"], e["data"], e["prev_hash"], e["this_hash"])
-                )
-            except (KeyError, TypeError):
-                return  # a corrupt log is discarded rather than crashing startup
+                self._path.replace(kept)
+                self.kept_as = kept.name
+            except OSError:
+                self.kept_as = None
+            return
         self._entries = restored
 
     def _save(self) -> None:
         if self._path is None:
             return
         try:
-            tmp = self._path.with_suffix(".tmp")
-            tmp.write_text(json.dumps([asdict(e) for e in self._entries]), "utf-8")
-            tmp.replace(self._path)
+            write_private(self._path, json.dumps([asdict(e) for e in self._entries]).encode())
         except OSError:
             pass
 

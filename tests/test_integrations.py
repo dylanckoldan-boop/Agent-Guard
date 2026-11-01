@@ -69,9 +69,13 @@ def test_sentinel_vision_adapter_degrades_to_notes_never_exceptions():
 
     assert adapter.available is False
     assert adapter.scan("/some/binary")["verdict"] == "unknown"
-    assert "no firewall" in adapter.block_ip("203.0.113.9")
-    assert "no sentinel-vision" in adapter.quarantine_add("/some/binary", "pacified")
-    assert "no sentinel-vision plugin-log" in adapter.plugin_log_append({"event": "x"})
+    assert "no firewall" in adapter.block_ip("45.12.10.9")
+    handoff = adapter.quarantine_add("/some/binary", "pacified")
+    assert handoff.status == "unavailable"
+    assert "no sentinel-vision" in handoff.detail
+    log = adapter.plugin_log_append({"event": "x"})
+    assert log.ok is False
+    assert "no sentinel-vision plugin-log" in log.detail
     assert adapter.plugin_log_verify()["intact"] is None
 
 
@@ -112,33 +116,31 @@ def test_the_guard_runs_standalone_with_no_partners(guard):
 
 
 # ----------------------------------------------------------------- partners present
-def test_importable_partners_are_detected_in_process(monkeypatch):
+def test_an_importable_package_is_not_trusted_as_sentinel_vision(monkeypatch):
+    # Anything named sentinel_vision on the Python path (a squatted PyPI package, a planted
+    # folder) is ignored when Foldward runs on its own (INT-03); cryptomigrate is unchanged.
     monkeypatch.setitem(sys.modules, "sentinel_vision", types.ModuleType("sentinel_vision"))
     monkeypatch.setitem(sys.modules, "cryptomigrate", types.ModuleType("cryptomigrate"))
 
-    assert sentinel_vision.probe() == (True, "in-process (import sentinel_vision)")
+    assert sentinel_vision.probe() == (False, "not installed")
     assert cryptomigrate.probe() == (True, "in-process (import cryptomigrate)")
-    status = partner_status()
-    assert (status.sentinel_vision, status.cryptomigrate) == (True, True)
 
 
-def test_partners_on_path_are_detected_through_their_cli(monkeypatch):
+def test_when_hosted_by_sentinel_vision_the_host_is_used_in_process(monkeypatch):
+    host = types.ModuleType("sentinel_vision")
+    host.__version__ = "0.5.2"
+    monkeypatch.setitem(sys.modules, "sentinel_vision", host)
+    sentinel_vision.mark_hosted()  # what the plugin entry point does
+
+    assert sentinel_vision.probe() == (True, "in-process (hosted by Sentinel Vision 0.5.2)")
+    assert partner_status().sentinel_vision is True
+
+
+def test_cryptomigrate_on_path_is_detected_through_its_cli(monkeypatch):
     on_path = types.SimpleNamespace(which=lambda name, *args, **kwargs: f"/opt/bin/{name}")
-    monkeypatch.setattr(sentinel_vision, "shutil", on_path)
     monkeypatch.setattr(cryptomigrate, "shutil", on_path)
 
-    assert sentinel_vision.probe() == (True, "cli (sentinel-vision-cli)")
     assert cryptomigrate.probe() == (True, "cli (cryptomigrate)")
-
-
-def test_the_guard_swaps_in_sentinel_vision_containment_when_it_is_present(monkeypatch):
-    monkeypatch.setitem(sys.modules, "sentinel_vision", types.ModuleType("sentinel_vision"))
-
-    g = Foldward(Settings())
-
-    assert g.partners.sentinel_vision is True
-    assert isinstance(g.containment, Containment)
-    assert type(g.containment) is not Containment
 
 
 def test_cryptomigrate_becomes_the_notary_when_it_is_present(monkeypatch, signer):
@@ -160,40 +162,97 @@ def test_cryptomigrate_scan_errors_are_reported_not_raised(monkeypatch, tmp_path
     assert "scan error" in result["detail"]
 
 
+_ITEM_ID = "0123456789abcdef0123456789abcdef"
+
+
 class FakeSentinelVisionCli:
-    """Stands in for ``sentinel-vision-cli``: records every invocation and returns a canned result."""
+    """Stands in for ``sentinel-vision-cli``: records every invocation and returns a canned result.
+    ``--version`` answers like the real tool (just the version number) and isn't recorded."""
 
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
         self.returncode = 0
         self.stdout = "ok"
         self.stderr = ""
+        self.version = "0.5.2"
 
     def run(self, cmd, **_kwargs):
+        if list(cmd)[1:] == ["--version"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=self.version + "\n", stderr="")
         self.calls.append(list(cmd))
         return subprocess.CompletedProcess(cmd, self.returncode, stdout=self.stdout, stderr=self.stderr)
 
 
 @pytest.fixture
 def sv_cli(monkeypatch):
+    """A Sentinel Vision found in its install folder, whose folder passes the ownership check."""
     cli = FakeSentinelVisionCli()
-    found_on_path = types.SimpleNamespace(which=lambda name, *args, **kwargs: f"/opt/sv/{name}")
-    monkeypatch.setattr(sentinel_vision, "shutil", found_on_path)
+    in_install_dir = types.SimpleNamespace(which=lambda name, *args, **kwargs: f"/opt/sv/{name}")
+    monkeypatch.setattr(sentinel_vision, "shutil", in_install_dir)
     monkeypatch.setattr(sentinel_vision, "subprocess", types.SimpleNamespace(run=cli.run))
+    monkeypatch.setattr(sentinel_vision, "_location_problem", lambda path, root: None)
     return cli
+
+
+def test_sentinel_vision_is_found_with_its_path_and_version(sv_cli):
+    # `status` shows exactly what was found (AG-A04, AG-C04)
+    assert sentinel_vision.probe() == (True, "cli /opt/sv/sentinel-vision-cli, version 0.5.2")
+
+
+def test_an_install_folder_others_can_change_is_not_trusted(sv_cli, monkeypatch):
+    monkeypatch.setattr(sentinel_vision, "_location_problem", lambda path, root: f"{path} can be changed by other users")
+
+    present, how = sentinel_vision.probe()
+
+    assert present is False
+    assert "isn't trusted" in how
+    assert type(sentinel_vision.make_containment(None)) is Containment
+
+
+def test_a_sentinel_vision_older_than_0_5_1_is_not_used(sv_cli):
+    sv_cli.version = "0.4.1"
+
+    present, how = sentinel_vision.probe()
+
+    assert present is False
+    assert "needs 0.5.1 or newer" in how
+
+
+def test_the_guard_swaps_in_sentinel_vision_containment_when_it_is_present(sv_cli):
+    g = Foldward(Settings())
+
+    assert g.partners.sentinel_vision is True
+    assert isinstance(g.containment, Containment)
+    assert type(g.containment) is not Containment
 
 
 def test_sentinel_vision_containment_routes_egress_blocks_to_the_os_firewall(sv_cli):
     containment = sentinel_vision.make_containment(None)
 
-    detail = containment.block_egress("203.0.113.9:443")
+    detail = containment.block_egress("45.12.10.9:443")
 
     assert type(containment) is not Containment
-    assert "203.0.113.9" in detail
-    assert sv_cli.calls == [["/opt/sv/sentinel-vision-cli", "net", "block", "203.0.113.9"]]  # port stripped
+    assert "45.12.10.9" in detail
+    assert sv_cli.calls == [["/opt/sv/sentinel-vision-cli", "net", "block", "--", "45.12.10.9"]]  # port stripped
+
+
+def test_an_ipv6_egress_block_targets_that_exact_address(sv_cli):
+    sentinel_vision.make_containment(None).block_egress("[2606:4700:4700::1111]:443")
+
+    assert sv_cli.calls == [["/opt/sv/sentinel-vision-cli", "net", "block", "--", "2606:4700:4700::1111"]]
+
+
+@pytest.mark.parametrize("bad", ["-h", "--help", "10.0.0.5", "203.0.113.9", "not-an-ip", ""])
+def test_only_a_public_address_reaches_the_firewall(sv_cli, bad):
+    # an option-looking or private address is refused before sentinel-vision is called (AG-F08)
+    detail = sentinel_vision.make_containment(None).block_egress(bad)
+
+    assert detail.startswith("firewall block refused")
+    assert sv_cli.calls == []
 
 
 def test_sentinel_vision_containment_hands_binaries_to_its_vault(sv_cli, tmp_path):
+    sv_cli.stdout = _ITEM_ID + "\n"
     binary = tmp_path / "agent.bin"
     binary.write_bytes(b"\x7fELF")
     own_vault = Quarantine()
@@ -201,13 +260,43 @@ def test_sentinel_vision_containment_hands_binaries_to_its_vault(sv_cli, tmp_pat
 
     detail = containment.quarantine_binary(str(binary), "agent-1", "pacified")
 
-    assert detail.startswith("handed to sentinel-vision vault")
-    assert sv_cli.calls == [["/opt/sv/sentinel-vision-cli", "quarantine", "add", str(binary), "--reason", "pacified"]]
+    assert detail == f"handed to sentinel-vision vault (id {_ITEM_ID})"
+    assert sv_cli.calls == [
+        ["/opt/sv/sentinel-vision-cli", "quarantine", "add", "--reason", "pacified", "--", str(binary)]
+    ]
     assert len(own_vault) == 0  # sentinel-vision is the system of record, not Foldward's own store
 
 
-def test_sentinel_vision_containment_falls_back_to_the_own_vault_when_the_verb_is_missing(sv_cli, tmp_path):
-    sv_cli.returncode, sv_cli.stderr = 2, "unknown command: quarantine add"
+def test_a_success_without_a_valid_item_id_is_not_trusted(sv_cli, tmp_path):
+    sv_cli.stdout = "ok"
+    binary = tmp_path / "agent.bin"
+    binary.write_bytes(b"\x7fELF")
+    own_vault = Quarantine()
+
+    detail = sentinel_vision.make_containment(own_vault).quarantine_binary(str(binary), "agent-1", "pacified")
+
+    assert detail.startswith("quarantine refused")
+    assert "valid item id" in detail
+    assert len(own_vault) == 0  # sentinel-vision may already hold it: no second copy
+
+
+def test_a_sentinel_vision_refusal_is_final(sv_cli, tmp_path):
+    # exit 3 = refused on purpose: Foldward must not move the file itself instead (INT-04)
+    sv_cli.returncode, sv_cli.stderr = 3, "error: operating-system files are never quarantined on request"
+    binary = tmp_path / "agent.bin"
+    binary.write_bytes(b"\x7fELF")
+    own_vault = Quarantine()
+
+    detail = sentinel_vision.make_containment(own_vault).quarantine_binary(str(binary), "agent-1", "pacified")
+
+    assert detail.startswith("quarantine refused")
+    assert "operating-system files" in detail
+    assert len(own_vault) == 0
+    assert binary.exists()
+
+
+def test_sentinel_vision_containment_falls_back_to_the_own_vault_when_it_is_unavailable(sv_cli, tmp_path):
+    sv_cli.returncode, sv_cli.stderr = 2, "error: protection service not reachable"
     binary = tmp_path / "agent.bin"
     binary.write_bytes(b"\x7fELF")
     own_vault = Quarantine()
@@ -216,40 +305,47 @@ def test_sentinel_vision_containment_falls_back_to_the_own_vault_when_the_verb_i
     detail = containment.quarantine_binary(str(binary), "agent-1", "pacified")
 
     assert "stored in encrypted quarantine" in detail
+    assert "sentinel-vision unavailable" in detail
     assert len(own_vault) == 1
+    assert not binary.exists()
 
 
 @pytest.mark.parametrize(
-    ("stdout", "verdict"),
+    ("returncode", "stdout", "verdict"),
     [
-        ('{"threats": 2}', "malware"),
-        ('{"infected": 1}', "malware"),
-        ('{"threats": 0}', "clean"),
-        ("{}", "clean"),
-        ("this is not json", "unknown"),
+        (1, '{"scanned": 1, "threats": 2, "errors": 0}', "malware"),  # exit 1 means threats found (INT-01)
+        (0, '{"scanned": 1, "threats": 0, "errors": 0}', "clean"),
+        (0, '{"scanned": 1, "threats": 2, "errors": 0}', "unknown"),  # output and exit code disagree
+        (0, '{"scanned": 1, "threats": 0, "errors": 1}', "unknown"),  # it couldn't read the file: not clean
+        (0, '{"scanned": 0, "threats": 0, "errors": 0}', "unknown"),  # nothing was scanned: not clean
+        (0, '{"threats": 0}', "unknown"),  # no file count
+        (0, "{}", "unknown"),  # no threat count
+        (0, "this is not json", "unknown"),
+        (2, "", "unknown"),  # an error is not a verdict
     ],
 )
-def test_scan_verdicts_come_from_the_cli_output(sv_cli, stdout, verdict):
-    sv_cli.stdout = stdout
+def test_scan_verdicts_follow_the_cli_contract(sv_cli, returncode, stdout, verdict):
+    sv_cli.returncode, sv_cli.stdout = returncode, stdout
 
     result = sentinel_vision.SentinelVisionAdapter().scan("/some/binary")
 
     assert result["verdict"] == verdict
-    assert sv_cli.calls[0][:3] == ["/opt/sv/sentinel-vision-cli", "scan", "/some/binary"]
+    assert sv_cli.calls[0] == ["/opt/sv/sentinel-vision-cli", "scan", "--no-quarantine", "--json", "--", "/some/binary"]
 
 
-# ----------------------------------------------------------- SV 0.4.1 protected log
+# ----------------------------------------------------------- SV 0.4.1+ protected log
 def test_plugin_log_append_uses_the_cli_when_present(sv_cli):
-    detail = sentinel_vision.SentinelVisionAdapter().plugin_log_append({"event": "pacify", "agent": "rogue-1"})
+    res = sentinel_vision.SentinelVisionAdapter().plugin_log_append({"event": "pacify", "agent": "rogue-1"})
 
-    assert "protected log" in detail
+    assert res.ok is True
+    assert "protected log" in res.detail
     assert sv_cli.calls[0][:4] == ["/opt/sv/sentinel-vision-cli", "plugin-log", "append", "foldward"]
     assert sv_cli.calls[0][4] == "--json"
     assert json.loads(sv_cli.calls[0][5]) == {"event": "pacify", "agent": "rogue-1"}
 
 
 def test_plugin_log_verify_checks_both_the_current_and_legacy_logs(sv_cli):
-    sv_cli.stdout = '{"intact": true}'
+    sv_cli.stdout = '{"intact": true, "entries": 2, "protected": true}'
 
     result = sentinel_vision.SentinelVisionAdapter().plugin_log_verify()
 
@@ -259,16 +355,35 @@ def test_plugin_log_verify_checks_both_the_current_and_legacy_logs(sv_cli):
 
 
 def test_plugin_log_verify_reports_a_broken_chain_not_a_missing_surface(sv_cli):
-    sv_cli.returncode, sv_cli.stdout = 1, '{"intact": false}'  # SV exits 1 for a broken chain
+    sv_cli.returncode, sv_cli.stdout = 1, '{"intact": false, "entries": 2, "protected": true}'  # SV exits 1
 
     result = sentinel_vision.SentinelVisionAdapter().plugin_log_verify()
 
     assert result["intact"] is False
 
 
+def test_plugin_log_verify_is_unknown_unless_every_log_was_checked(sv_cli, monkeypatch):
+    adapter = sentinel_vision.SentinelVisionAdapter()
+    answers = {
+        "foldward": subprocess.CompletedProcess([], 2, stdout="", stderr="error: service not reachable"),
+        "agent-guard": subprocess.CompletedProcess([], 0, stdout='{"intact": true, "entries": 0}', stderr=""),
+    }
+    monkeypatch.setattr(adapter, "_run", lambda args, timeout: answers[args[2]])
+
+    assert adapter.plugin_log_verify()["intact"] is None  # a never-written legacy log alone proves nothing
+
+
+def test_plugin_log_verify_distrusts_an_answer_that_contradicts_its_exit_code(sv_cli):
+    sv_cli.returncode, sv_cli.stdout = 1, '{"intact": true, "entries": 2, "protected": true}'
+
+    assert sentinel_vision.SentinelVisionAdapter().plugin_log_verify()["intact"] is None
+
+
 def test_pacify_mirrors_a_record_to_the_protected_log_when_present(guard):
     appended: list[dict] = []
-    guard.sv = types.SimpleNamespace(plugin_log_append=lambda rec: appended.append(rec) or "ok")
+    guard.sv = types.SimpleNamespace(
+        plugin_log_append=lambda rec: appended.append(rec) or types.SimpleNamespace(ok=True, detail="appended")
+    )
     agent = types.SimpleNamespace(
         pid=None, agent_id="rogue-1", state="flagged", label="rogue",
         proc=types.SimpleNamespace(exe=None),
@@ -283,6 +398,28 @@ def test_pacify_mirrors_a_record_to_the_protected_log_when_present(guard):
     assert "audit_head" in appended[0]
 
 
+def test_a_record_that_cant_be_mirrored_is_reported_and_retried(guard, monkeypatch):
+    # INT-05: a failed copy to the protected log is never silent
+    answers = [types.SimpleNamespace(ok=False, detail="service unreachable"), types.SimpleNamespace(ok=True, detail="ok")]
+    tried: list[dict] = []
+    guard.sv = types.SimpleNamespace(plugin_log_append=lambda rec: tried.append(rec) or answers.pop(0))
+    alerts: list[str] = []
+    guard.alert_listeners.append(lambda title, text, level: alerts.append(title))
+    monkeypatch.setattr(guard.detector, "snapshot_processes", lambda: [])
+    agent = types.SimpleNamespace(
+        pid=None, agent_id="rogue-1", state="flagged", label="rogue", proc=types.SimpleNamespace(exe=None)
+    )
+
+    guard.pacify(agent, "revoke", auto=True)
+
+    assert "Containment record not yet protected" in alerts
+    assert guard.audit.events("mirror.failed")
+    guard.scan()  # the next scan retries
+    assert len(tried) == 2
+    assert guard.audit.events("mirror.retried")
+    assert guard._pending_mirror == []
+
+
 def test_plugin_pages_are_namespaced_to_avoid_host_key_collisions():
     pytest.importorskip("PySide6")
     from foldward.gui.plugin import register
@@ -295,4 +432,4 @@ def test_plugin_pages_are_namespaced_to_avoid_host_key_collisions():
     # sentinel-vision skips a plugin page whose key matches one of its built-ins
     sv_builtins = {"overview", "quarantine", "settings", "scan", "network", "history", "protection"}
     assert not (set(keys) & sv_builtins)
-    assert all(p.label.startswith("AG ·") for p in pages)
+    assert all(p.label.startswith("Foldward ·") for p in pages)

@@ -83,15 +83,29 @@ class NetPage(Page):
         if d is None:
             QMessageBox.information(self, "Pacify", "Select an agent first.")
             return
-        if rung in ("suspend", "revoke") and self.guard.settings.report_only:
-            if QMessageBox.question(
-                self, "Confirm containment",
-                f"{rung.capitalize()} {d.label} (pid {d.pid})?\n\nThis is reversible — the agent is preserved and can be released.",
-            ) != QMessageBox.Yes:
-                return
+        question = self.confirmation(rung, d)
+        if question and QMessageBox.question(self, "Confirm containment", question) != QMessageBox.Yes:
+            return
         self.guard.pacify(d, rung, auto=False)
         self.ctx.notify("Agent pacified", f"{d.label} contained → {rung}", "danger")
         self.refresh()
+
+    def confirmation(self, rung: str, d) -> str | None:
+        """The question to ask before a manual containment step, or None. Quarantine
+        always asks, because it moves the agent's file (AG-A05); suspend and revoke ask
+        while Foldward is in report-only mode."""
+        if rung == "quarantine":
+            return (
+                f"Quarantine {d.label} (pid {d.pid})?\n\nIts program or script file will be moved into the "
+                "encrypted quarantine (Sentinel Vision's vault when it is installed), so it can't run from where "
+                "it is. Shared runtimes such as Python or Java are never moved. You can restore the file later."
+            )
+        if rung in ("suspend", "revoke") and self.guard.settings.report_only:
+            return (
+                f"{rung.capitalize()} {d.label} (pid {d.pid})?\n\nThis is reversible — the agent is preserved "
+                "and can be released."
+            )
+        return None
 
     def _release(self) -> None:
         d = self._selected()

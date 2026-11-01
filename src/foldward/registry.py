@@ -25,6 +25,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from foldward.crypto import AuditLog, Signer
+from foldward.osutil import write_private
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ class RevocationRegistry:
         # survive a restart or a contained agent would silently become sanctioned
         # again (AG-A03). With no path the registry is in-memory (unit-test default).
         self._path = path
+        self.rejected_on_load = 0
         if path is not None:
             self._load()
 
@@ -59,17 +61,30 @@ class RevocationRegistry:
             return
         for item in raw:
             try:
-                self._revoked[item["agent_id"]] = Revocation(**item)
+                rev = Revocation(**item)
             except (KeyError, TypeError):
                 continue
+            # The saved file is only as trustworthy as the folder it sits in, so every
+            # revocation is checked again on load: a forged one can't lock out a
+            # healthy agent after a restart (AG-N04).
+            try:
+                ok = self._verifier.verify(
+                    self._message(rev.agent_id, rev.reason, rev.issued_at, rev.issuer_ref), rev.signature
+                )
+            except Exception:
+                ok = False
+            if not ok:
+                self.rejected_on_load += 1
+                if self._audit is not None:
+                    self._audit.append("revocation.rejected", {"agent": rev.agent_id, "reason": "bad_signature_on_disk"})
+                continue
+            self._revoked[rev.agent_id] = rev
 
     def _save(self) -> None:
         if self._path is None:
             return
         try:
-            tmp = self._path.with_suffix(".tmp")
-            tmp.write_text(json.dumps([asdict(r) for r in self._revoked.values()]), "utf-8")
-            tmp.replace(self._path)
+            write_private(self._path, json.dumps([asdict(r) for r in self._revoked.values()]).encode())
         except OSError:
             pass
 

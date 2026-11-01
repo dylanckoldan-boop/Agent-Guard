@@ -85,13 +85,18 @@ class Credential:
 
 @dataclass
 class AgentIdentity:
-    """A sanctioned agent, as Foldward tracks it at runtime."""
+    """A sanctioned agent, as Foldward tracks it at runtime.
+
+    A process is this agent only while the PID *and* the process start time both
+    match what was recorded at registration: a PID is reused as soon as its process
+    exits, so a PID alone would hand the sanctioned status to a stranger (AG-N04)."""
 
     agent_id: str
     label: str
     credential: Credential
     pid: int | None = None
     registered_at: float = field(default_factory=time.time)
+    pid_create_time: float | None = None
 
 
 class TrustDomain:

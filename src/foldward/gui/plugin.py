@@ -42,7 +42,12 @@ def register() -> list[PluginPage]:
     from foldward.gui.context import GuardContext
     from foldward.gui.pages import NAV
     from foldward.gui.workers import Bridge
+    from foldward.integrations import sentinel_vision as sv_integ
 
+    # Only sentinel-vision calls this entry point, so `sentinel_vision` is the host's
+    # own package and may be used in-process; standalone, Foldward never imports a
+    # package by that name (INT-03).
+    sv_integ.mark_hosted()
     guard = Foldward(Settings.load())  # one engine shared by all hosted pages
 
     def _factory(cls):
@@ -58,11 +63,11 @@ def register() -> list[PluginPage]:
 
     # The host skips any page whose key collides with one of its own built-ins
     # (sentinel-vision has overview/quarantine/settings), so namespace every key
-    # with "ag_" and label it clearly so Foldward's pages are distinct in the
-    # host's sidebar.
+    # with "ag_" (kept from the Agent Guard name: sentinel-vision documents these
+    # keys) and label it clearly so Foldward's pages are distinct in the host's sidebar.
     def _label(nav_label: str) -> str:
         name = nav_label.strip().split(None, 1)[-1]  # drop the leading glyph
-        return f"AG · {name}"
+        return f"Foldward · {name}"
 
     # Prefer the host's ready-made descriptor when hosted (it is importable only
     # because sentinel-vision is the caller) so an isinstance check on its side

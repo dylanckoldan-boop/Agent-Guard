@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "foldward"
-version = "0.1.0"
+version = "0.2.0"
 description = "A containment net for autonomous AI agents — detect rogue agent activity and pacify it, reversibly, within your own perimeter."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,7 +22,7 @@ classifiers = [
 # cryptomigrate) appears here — not as a dependency, not as an optional extra.
 dependencies = [
     "psutil>=5.9",
-    "cryptography>=42.0",
+    "cryptography>=47.0",  # 47 is the first release with ML-DSA (post-quantum signing)
 ]
 
 [project.optional-dependencies]
@@ -53,9 +53,15 @@ line-length = 118
 target-version = "py310"
 
 [tool.ruff.lint]
-# High-signal families. Broad `except` (BLE), try/except/pass (S110) and manual
-# subprocess returncode checks (PLW1510) are deliberate here — the integration
-# adapters must degrade gracefully and never crash the host — so they are not selected.
-select = ["E", "F", "I", "UP", "RUF"]
+# High-signal families, including the flake8-bandit security rules (S, AG-A10).
+# Broad `except` (BLE), try/except/pass and try/except/continue (S110, S112) are
+# deliberate in the adapters, which must degrade gracefully and never crash the host;
+# failures that matter (a containment record not copied, a refused quarantine) are
+# reported explicitly instead.
+select = ["E", "F", "I", "UP", "RUF", "S"]
 # Long lines are almost all inline GUI stylesheet / f-strings, kept readable in place.
-ignore = ["E501"]
+ignore = ["E501", "S110", "S112"]
+
+[tool.ruff.lint.per-file-ignores]
+# tests use assert, spawn helper processes and write temp files on purpose
+"tests/**" = ["S101", "S105", "S106", "S108", "S311", "S603", "S607"]

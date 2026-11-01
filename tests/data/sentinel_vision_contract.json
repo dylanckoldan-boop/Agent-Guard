@@ -1,0 +1,62 @@
+{
+  "about": "The command-line contract between sentinel-vision-cli and companion programs such as Foldward. docs/PLUGINS.md explains it in words; tests/test_plugin_contract.py checks the real tool against this file on every change. Companion programs keep a copy and replay the examples in their own tests. Change it only together with plugin_api.API_VERSION and a note in docs/PLUGINS.md.",
+  "sentinel_vision": "0.5.2",
+  "plugin_api_version": 1,
+  "arguments": "Put -- before any file name or address, so it can never be read as an option.",
+  "exit_codes": {
+    "0": "success: done, chain intact, or no threats found",
+    "1": "an answer that isn't success: threats found (scan) or a broken chain (plugin-log verify)",
+    "2": "error: nothing changed",
+    "3": "refused on purpose (quarantine add, since 0.5.2): don't do it some other way"
+  },
+  "commands": [
+    {
+      "name": "version",
+      "argv": ["--version"],
+      "cases": [
+        {"case": "ok", "exit": 0, "stdout_pattern": "\\d+\\.\\d+\\.\\d+\\s*", "example": "0.5.2\n"}
+      ]
+    },
+    {
+      "name": "quarantine add",
+      "argv": ["quarantine", "add", "--reason", "<reason>", "--", "<path>"],
+      "cases": [
+        {"case": "moved", "exit": 0, "stdout_pattern": "[0-9a-f]{32}\\s*", "example": "0f1e2d3c4b5a69788796a5b4c3d2e1f0\n"},
+        {"case": "refused", "exit": 3, "example": "", "example_stderr": "error: operating-system files are never quarantined on request\n"},
+        {"case": "error", "exit": 2, "example": "", "example_stderr": "error: not an existing file: /missing/agent.bin\n"}
+      ]
+    },
+    {
+      "name": "plugin-log append",
+      "argv": ["plugin-log", "append", "<name>", "--json", "<record>"],
+      "cases": [
+        {"case": "appended", "exit": 0, "stdout_pattern": "\\d+\\s*", "example": "1\n"},
+        {"case": "error", "exit": 2, "example": "", "example_stderr": "error: Expecting value: line 1 column 1 (char 0)\n"}
+      ]
+    },
+    {
+      "name": "plugin-log verify",
+      "argv": ["plugin-log", "verify", "<name>"],
+      "cases": [
+        {"case": "intact", "exit": 0, "json_keys": ["entries", "intact", "protected"], "example": "{\"intact\": true, \"entries\": 1, \"protected\": false}\n"},
+        {"case": "broken", "exit": 1, "json_keys": ["entries", "intact", "protected"], "example": "{\"intact\": false, \"entries\": 2, \"protected\": false}\n"}
+      ]
+    },
+    {
+      "name": "net block",
+      "argv": ["net", "block", "--", "<public ip>"],
+      "cases": [
+        {"case": "blocked", "exit": 0, "example": "Blocked 45.12.10.9 in the system firewall.\n"},
+        {"case": "error", "exit": 2, "example": "", "example_stderr": "error: 192.168.0.1 is not a public internet address\n"}
+      ]
+    },
+    {
+      "name": "scan",
+      "argv": ["scan", "--no-quarantine", "--json", "--", "<path>"],
+      "cases": [
+        {"case": "clean", "exit": 0, "json_keys": ["duration", "errors", "infected", "results", "review", "scanned", "threats"], "example": "{\n  \"scanned\": 1,\n  \"infected\": 0,\n  \"threats\": 0,\n  \"review\": 0,\n  \"errors\": 0,\n  \"duration\": 0.01,\n  \"results\": []\n}\n"},
+        {"case": "threats", "exit": 1, "json_keys": ["duration", "errors", "infected", "results", "review", "scanned", "threats"], "example": "{\n  \"scanned\": 1,\n  \"infected\": 1,\n  \"threats\": 1,\n  \"review\": 0,\n  \"errors\": 0,\n  \"duration\": 0.01,\n  \"results\": [{\"path\": \"/tmp/agent.com\", \"sha256\": \"275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f\", \"action\": \"\", \"review_only\": false, \"error\": \"\", \"detections\": [{\"engine\": \"hash\", \"name\": \"EICAR-Test-File\", \"severity\": \"High\", \"description\": \"test file\"}]}]\n}\n"}
+      ]
+    }
+  ]
+}

@@ -241,7 +241,8 @@ def test_pacify_climbs_to_the_requested_rung(guard, requested, reached):
     [
         # a script run under an interpreter: quarantine the script
         ("/usr/bin/python3", ["/usr/bin/python3", "/home/x/agent.py"], "/home/x/agent.py"),
-        ("", ["python", "langchain_agent.py"], "langchain_agent.py"),
+        # a relative script with no known working directory: nothing, never a same-named file elsewhere
+        ("", ["python", "langchain_agent.py"], None),
         # a `-m module` run: NOTHING safe to isolate — never the interpreter (AG-A05)
         ("/usr/bin/python3", ["python", "-m", "crewai", "run"], None),
         ("/usr/local/bin/node", ["node"], None),
@@ -304,7 +305,7 @@ def test_scan_scores_detections_and_the_snapshot_counts_them(guard, monkeypatch)
 
 
 def test_revoking_a_credential_makes_the_agent_unsanctioned_again(guard, monkeypatch):
-    ident = guard.register_agent("worker", Scope(), pid=424242)
+    ident = guard.register_agent("worker", Scope(), pid=424242, create_time=0.0)
     proc = ProcessInfo(pid=424242, name="worker", exe="", cmdline=["python", "langchain_worker.py"])
     monkeypatch.setattr(guard.detector, "snapshot_processes", lambda: [proc])
 

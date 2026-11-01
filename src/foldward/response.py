@@ -4,13 +4,18 @@
 threat demands:
 
 1. **throttle**   — rate-limit the agent's CPU/priority. Buys time, fully reversible.
-2. **quarantine** — copy its binary into the encrypted store (isolate it from
-   where it ran); optionally cut egress.
+2. **quarantine** — move its binary or script into the encrypted store (isolate it
+   from where it ran).
 3. **revoke**     — pull its credential so every scoped door closes; propagate a
    signed revocation to the mesh.
 4. **suspend**    — freeze the process intact (SIGSTOP). The cleanest pacification:
    preserved for forensics, released if cleared.
 5. **terminate**  — last resort, after the binary is preserved.
+
+When the ladder climbs to suspend or beyond, the agent is **frozen first** and the
+other rungs run after it: nothing slow (reading its file into quarantine, a call to
+sentinel-vision) happens while the agent can still act, so it can't stall its own
+containment (AG-N02). Terminate always comes last.
 
 Everything here happens on resources the defender owns — deny, revoke, isolate,
 freeze. Foldward never reaches into the agent's own infrastructure to disable
@@ -32,7 +37,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 
 from foldward.crypto import AuditLog, Signer
-from foldward.quarantine import Quarantine
+from foldward.quarantine import Quarantine, QuarantineRefused
 from foldward.registry import RevocationRegistry
 
 try:
@@ -152,6 +157,8 @@ class Containment:
         try:
             item = self._q.add(path, agent_id, reason)
             return f"stored in encrypted quarantine as {item.item_id}"
+        except QuarantineRefused as exc:
+            return f"quarantine refused: {exc}"
         except Exception as exc:
             return f"quarantine failed: {exc}"
 
@@ -172,6 +179,16 @@ class Response:
         self._escalate = escalate or (lambda ev: None)
         self.history: list[dict] = []
 
+    @staticmethod
+    def plan(up_to: Rung) -> list[Rung]:
+        """The rungs to run, in order: every rung up to ``up_to``, with suspend moved
+        to the front when it is included (freeze first, then preserve — AG-N02)."""
+        rungs = [r for r in Rung if r <= up_to]
+        if Rung.SUSPEND in rungs:
+            rungs.remove(Rung.SUSPEND)
+            rungs.insert(0, Rung.SUSPEND)
+        return rungs
+
     def pacify(self, agent, up_to: Rung, *, auto: bool, exe_path: str | None = None) -> list[ActionResult]:
         """Climb the ladder up to and including ``up_to``. Records every step in
         the tamper-evident audit and escalates to a human at the end."""
@@ -181,9 +198,7 @@ class Response:
         results: list[ActionResult] = []
         self._audit.append("pacify.begin", {"agent": agent_id, "pid": pid, "up_to": up_to.name, "auto": auto})
 
-        for rung in Rung:
-            if rung > up_to:
-                break
+        for rung in self.plan(up_to):
             detail = self._do_rung(rung, pid, agent_id, exe_path, create_time)
             low = detail.lower()
             ok = not any(w in low for w in ("fail", "unavailable", "refused"))

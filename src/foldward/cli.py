@@ -33,6 +33,8 @@ def cmd_status(g: Foldward, args) -> int:
                 "app": APP_NAME, "version": __version__, "data_dir": str(data_root()),
                 "signer": g.signer.scheme,
                 "partners": {"sentinel_vision": p.sentinel_vision, "cryptomigrate": p.cryptomigrate},
+                "sentinel_vision": p.sentinel_vision_how,
+                "warnings": g.warnings,
             },
             True,
         )
@@ -40,8 +42,11 @@ def cmd_status(g: Foldward, args) -> int:
     print(f"{APP_NAME} {__version__}")
     print(f"  data:    {data_root()}")
     print(f"  signer:  {g.signer.scheme}")
-    print(f"  sentinel-vision: {'yes — ' + p.sentinel_vision_how if p.sentinel_vision else 'not installed'}")
+    # the resolved path and version, or why an installed copy wasn't trusted (AG-A04, AG-C04)
+    print(f"  sentinel-vision: {'yes — ' if p.sentinel_vision else 'no — '}{p.sentinel_vision_how}")
     print(f"  cryptomigrate:   {'yes — ' + p.cryptomigrate_how if p.cryptomigrate else 'not installed'}")
+    for w in g.warnings:
+        print(f"  WARNING: {w}")
     return 0
 
 
@@ -80,7 +85,11 @@ def cmd_register(g: Foldward, args) -> int:
         allowed_path_prefixes=frozenset(args.paths or []),
         may_spawn=args.may_spawn,
     )
-    ident = g.register_agent(args.label, scope, pid=args.pid)
+    try:
+        ident = g.register_agent(args.label, scope, pid=args.pid)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     print(f"Registered {ident.agent_id} ({ident.label}) — credential {ident.credential.issuer_ref}")
     return 0
 

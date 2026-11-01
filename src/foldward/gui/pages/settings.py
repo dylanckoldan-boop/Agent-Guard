@@ -46,7 +46,8 @@ class SettingsPage(Page):
         self.cb_mix.setChecked(s.mix_oversight_traffic)
         rl.addWidget(self.cb_mix)
         p = self.guard.partners
-        rl.addWidget(self._partner("sentinel-vision", "scan · firewall · hardened vault · the Wall", p.sentinel_vision))
+        rl.addWidget(self._partner("sentinel-vision", "hardened vault · protected log", p.sentinel_vision))
+        rl.addWidget(label(f"sentinel-vision: {p.sentinel_vision_how}", obj="muted", wrap=True))
         rl.addWidget(self._partner("cryptomigrate", "crypto-posture scan · PQ-signed attestation", p.cryptomigrate))
         rl.addWidget(label("Both optional. Foldward runs fully standalone with neither.", obj="muted", wrap=True))
 

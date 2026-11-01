@@ -96,7 +96,7 @@ def test_canary_contact_trips_during_a_normal_scan(tmp_path):
 # AG-A03
 def test_state_survives_a_restart():
     a = Foldward(Settings())
-    ident = a.register_agent('researcher', Scope(allowed_hosts=frozenset({'api.anthropic.com'})), pid=4321)
+    ident = a.register_agent('researcher', Scope(allowed_hosts=frozenset({'api.anthropic.com'})), pid=4321, create_time=1700000000.0)
     a.registry.revoke('agent-x', 'test', a.signer)
     b = Foldward(Settings())
     assert [i.agent_id for i in b.sanctioned()] == [ident.agent_id]
@@ -323,10 +323,16 @@ def test_install_commands_never_fetch_the_unrelated_pypi_package():
         for line in f.read_text(encoding='utf-8').splitlines():
             if 'pip install' not in line:
                 continue
-            names = {_requirement_name(t) for t in line.split('pip install', 1)[1].split()}
-            if names & {'foldward', 'foldward'}:
+            rest = line.split('pip install', 1)[1]
+            if '@ git+https://github.com/dylanckoldan-boop/Foldward@v' in rest:
+                continue  # a direct reference to a tagged release of this repository, never a PyPI name
+            names = {_requirement_name(t) for t in rest.split()}
+            if names & {'foldward', 'agent-guard', 'agent_guard'}:
                 offenders.append(f.name + ': ' + line.strip())
-    assert offenders == [], 'PyPI foldward is an unrelated project; install from the repository'
+    assert offenders == [], (
+        "PyPI 'agent-guard' is an unrelated project and 'foldward' isn't claimed there; "
+        'install a tagged release from the repository'
+    )
 
 
 # AG-B01

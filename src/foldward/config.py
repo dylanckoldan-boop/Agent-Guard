@@ -17,6 +17,7 @@ from pathlib import Path
 
 from foldward import APP_NAME
 from foldward.align import DEFAULT_ALIGNMENT
+from foldward.osutil import write_private
 
 log = logging.getLogger(__name__)
 _DIR_NAME = "Foldward"
@@ -149,14 +150,7 @@ class Settings:
         return cls(**_validated_kwargs(raw))
 
     def save(self) -> None:
-        tmp = self.path().with_suffix(".tmp")
-        tmp.write_text(json.dumps(asdict(self), indent=2), "utf-8")
-        tmp.replace(self.path())
-        try:
-            if sys.platform != "win32":
-                self.path().chmod(0o600)
-        except OSError:
-            pass
+        write_private(self.path(), json.dumps(asdict(self), indent=2).encode())  # owner-only from the start
 
 
 def _is_str_list(v: object) -> bool:
