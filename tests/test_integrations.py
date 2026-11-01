@@ -419,10 +419,52 @@ def test_a_record_that_cant_be_mirrored_is_reported_and_retried(guard, monkeypat
 
     assert "Containment record not yet protected" in alerts
     assert guard.audit.events("mirror.failed")
+    guard._next_mirror_try = 0.0  # a minute later (INT-N02: retries wait a minute after a failure)
     guard.scan()  # the next scan retries
     assert len(tried) == 2
     assert guard.audit.events("mirror.retried")
-    assert guard._pending_mirror == []
+    assert len(guard._pending) == 0
+
+
+# ----------------------------------------------------------- a full protected log (INT-N01)
+def test_a_full_protected_log_is_recognised(sv_cli):
+    sv_cli.returncode, sv_cli.stderr = 2, "error: log is full (50 MB); nothing was written\n"
+    res = sentinel_vision.SentinelVisionAdapter().plugin_log_append({"event": "pacify"})
+    assert res.ok is False and res.full is True and "log is full" in res.detail
+
+    sv_cli.stderr = "error: the protection service is installed but not reachable; nothing was written\n"
+    assert sentinel_vision.SentinelVisionAdapter().plugin_log_append({"event": "pacify"}).full is False
+
+
+def test_an_in_process_failure_is_reported_as_it_is(monkeypatch):
+    # hosted by sentinel-vision with no command-line tool found: the host's own error, not "no surface"
+    class FullLog:
+        def append(self, record):
+            raise RuntimeError("log is full (50 MB); nothing was written")
+
+    host = types.ModuleType("sentinel_vision")
+    api = types.ModuleType("sentinel_vision.plugin_api")
+    api.plugin_log = lambda name: FullLog()
+    monkeypatch.setitem(sys.modules, "sentinel_vision", host)
+    monkeypatch.setitem(sys.modules, "sentinel_vision.plugin_api", api)
+    sentinel_vision.mark_hosted()
+
+    res = sentinel_vision.SentinelVisionAdapter().plugin_log_append({"event": "pacify"})
+
+    assert res.ok is False and res.full is True and res.detail.startswith("plugin-log append failed (in-process)")
+
+
+def test_how_full_the_protected_log_is_comes_from_verify(sv_cli):
+    sv_cli.stdout = '{"intact": true, "entries": 3, "bytes": 900, "limit": 52428800, "protected": true}'
+    assert sentinel_vision.SentinelVisionAdapter().plugin_log_room() == {"bytes": 900, "limit": 52428800}
+    assert sv_cli.calls[-1][1:] == ["plugin-log", "verify", "foldward"]
+
+    sv_cli.stdout = '{"intact": true, "entries": 3, "protected": true}'  # sentinel-vision 0.5.2 doesn't say
+    assert sentinel_vision.SentinelVisionAdapter().plugin_log_room() is None
+    sv_cli.stdout = '{"intact": true, "entries": 3, "bytes": null, "limit": 52428800, "protected": true}'
+    assert sentinel_vision.SentinelVisionAdapter().plugin_log_room() is None
+    sv_cli.returncode, sv_cli.stdout = 2, ""
+    assert sentinel_vision.SentinelVisionAdapter().plugin_log_room() is None
 
 
 def test_plugin_pages_are_namespaced_to_avoid_host_key_collisions():
@@ -438,3 +480,17 @@ def test_plugin_pages_are_namespaced_to_avoid_host_key_collisions():
     sv_builtins = {"overview", "quarantine", "settings", "scan", "network", "history", "protection"}
     assert not (set(keys) & sv_builtins)
     assert all(p.label.startswith("Foldward ·") for p in pages)
+
+
+def test_the_integration_guide_lists_every_plugin_page():
+    # INT-N03: the guide listed six of the seven page keys
+    pytest.importorskip("PySide6")
+    import re
+    from pathlib import Path
+
+    from foldward.gui.plugin import register
+
+    guide = Path(__file__).resolve().parent.parent / "docs" / "SENTINEL_VISION_INTEGRATION.md"
+    documented = set(re.findall(r"`(ag_[a-z]+)`", guide.read_text("utf-8")))
+
+    assert documented == {p.key for p in register()}

@@ -7,7 +7,8 @@ and its machine-readable form, [`docs/plugin-contract.json`](https://github.com/
 is copied into this repository as `tests/data/sentinel_vision_contract.json` and replayed
 by `tests/test_sentinel_vision_contract.py`. Foldward 0.2.0 and later need
 sentinel-vision 0.5.2 or newer: 0.5.1 has no exit code 3, and on Python 3.10, 3.11 and early 3.12 it
-can't parse `quarantine add --reason TEXT -- PATH`.
+can't parse `quarantine add --reason TEXT -- PATH`. sentinel-vision 0.5.3 also tells Foldward how
+full its protected log is (section 3).
 
 The rule in both directions: **neither project depends on the other.** Foldward
 imports nothing from sentinel-vision at module scope; sentinel-vision imports
@@ -44,8 +45,10 @@ each with a `key`, a sidebar `label` and a `factory(ctx)` that returns a QWidget
 
 - **Keys are namespaced `ag_*`** (kept from the Agent Guard name, because
   sentinel-vision documents them). sentinel-vision skips any plugin page whose key
-  collides with one of its built-ins, so Foldward exposes `ag_overview`, `ag_net`,
-  `ag_detections`, `ag_mesh`, `ag_quarantine`, `ag_settings`, labelled `Foldward · …`.
+  collides with one of its built-ins, so Foldward exposes seven pages: `ag_overview`,
+  `ag_net`, `ag_detections`, `ag_alignment`, `ag_mesh`, `ag_quarantine` and `ag_settings`,
+  labelled `Foldward · …`. `tests/test_integrations.py` checks this list against the pages
+  `register()` returns.
 - **It uses the host's descriptor when hosted.** `register()` returns
   `sentinel_vision.plugin_api.PluginPage` instances when that import succeeds
   (it only does because sentinel-vision is the caller), and its own duck-typed
@@ -62,7 +65,7 @@ checks their permissions before loading. Install a **tagged release** from an
 administrator terminal, with a Python matching the app (3.12):
 
 ```
-py -3.12 -m pip install --target "C:\Program Files\Sentinel Vision\plugins\foldward" "foldward @ git+https://github.com/dylanckoldan-boop/Foldward@v0.2.1"
+py -3.12 -m pip install --target "C:\Program Files\Sentinel Vision\plugins\foldward" "foldward @ git+https://github.com/dylanckoldan-boop/Foldward@v0.2.2"
 ```
 
 Install a tag from the repository, never the moving `main` branch and never a
@@ -108,8 +111,26 @@ On Windows the protection service keeps this log where a program running as the
 user can add and read entries but **cannot change or delete them**; each entry is
 hash-chained to its predecessor and `plugin-log verify` reports whether the chain
 is intact (exit 0 intact, 1 broken). `core.py` appends a record — carrying the
-signed audit head — on every `pacify()`. A copy that fails is reported to the
-operator and retried at the next scan (INT-05).
+signed audit head — on every `pacify()`.
+
+Each record is first queued in an owner-only file in Foldward's state folder
+(`state/protected-log-queue.json`), then copied, oldest first. A copy that fails is
+reported to the operator, stays queued across restarts, and is retried at most once
+a minute until sentinel-vision takes it (INT-05, INT-N02). The record is in
+Foldward's own signed audit all along, so the queue is a second copy, never the only
+one. A queue file that can't be read is kept aside and reported at start-up.
+
+**A full log may be full on purpose (INT-N01).** Any program running as the user can
+add records to the user's plugin logs (it can't change or delete them), so one could
+fill Foldward's log (50 MB) to keep later containment records out. When
+sentinel-vision refuses a record because the log is full, Foldward raises a
+"danger" alert, at most once an hour, saying the log may have been filled on
+purpose, and keeps the records queued. With sentinel-vision 0.5.3 or newer,
+Foldward also asks every six hours how full the log is (`plugin-log verify` reports
+`bytes` and `limit`) and warns from 80%; on Windows sentinel-vision's own service
+warns too, naming the programs that added most of the records. How an
+administrator makes room while keeping the full log as evidence is in
+sentinel-vision's `docs/PLUGINS.md`, "When a log is full".
 
 New records are written under the log name **`foldward`**. `plugin_log_verify`
 checks both `foldward` and the pre-rename **`agent-guard`** log, so containment

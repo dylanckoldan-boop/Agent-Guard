@@ -26,7 +26,10 @@ address follows ``--``, so it can never be read as an option (AG-F08, INT-01).
   can't be reached does Foldward's own vault, which applies the same safety rules,
   take the file (INT-04).
 * ``plugin-log append|verify`` — the protected, append-only record of every
-  containment (on Windows, kept by sentinel-vision's protection service).
+  containment (on Windows, kept by sentinel-vision's protection service). Any
+  program running as the user can add to that log, so a refusal because it is
+  full is flagged (``LogResult.full``), and from 0.5.3 ``verify`` also tells how
+  full it is (:meth:`SentinelVisionAdapter.plugin_log_room`) (INT-N01).
 * ``net block`` — an OS-firewall block for a public address. The ladder doesn't
   call it yet (planned).
 * ``scan --json`` — a malware verdict for a file. Not used in decisions yet (planned).
@@ -240,6 +243,10 @@ class HandOff:
 class LogResult:
     ok: bool
     detail: str
+    full: bool = False  # the protected log refused the record because it is full (INT-N01)
+
+
+_LOG_FULL = "log is full"  # sentinel-vision's error for a full plugin log (docs/plugin-contract.json)
 
 
 class SentinelVisionAdapter:
@@ -346,15 +353,17 @@ class SentinelVisionAdapter:
         — its 'records nothing else can erase'. On Windows the protection service
         keeps it where a program running as the user can add and read but cannot
         change or delete. Uses the in-process API only when hosted by sentinel-vision,
-        otherwise the command-line tool."""
+        otherwise the command-line tool. ``full`` is set when the log refused the record
+        because it is full: any program running as the user can fill it (INT-N01)."""
+        problem = None
         if self._mod is not None:
             try:
                 from sentinel_vision.plugin_api import plugin_log  # type: ignore
 
                 plugin_log(_PLUGIN_NAME).append(record)
                 return LogResult(True, "appended to sentinel-vision protected log (in-process)")
-            except Exception:
-                pass
+            except Exception as exc:
+                problem = f"plugin-log append failed (in-process): {_tail(str(exc))}"
         if self._cli:
             try:
                 out = self._run(["plugin-log", "append", _PLUGIN_NAME, "--json", json.dumps(record)], timeout=60)
@@ -362,8 +371,37 @@ class SentinelVisionAdapter:
                 return LogResult(False, f"plugin-log append failed: {exc}")
             if out.returncode == EXIT_OK:
                 return LogResult(True, "appended to sentinel-vision protected log")
-            return LogResult(False, f"plugin-log append failed (exit {out.returncode}): {_tail(out.stderr)}")
+            err = _tail(out.stderr)
+            return LogResult(False, f"plugin-log append failed (exit {out.returncode}): {err}", _LOG_FULL in err)
+        if problem:
+            return LogResult(False, problem, _LOG_FULL in problem)
         return LogResult(False, "no sentinel-vision plugin-log surface available")
+
+    def plugin_log_room(self) -> dict | None:
+        """How full Foldward's protected log is, ``{'bytes': used, 'limit': most}``, from
+        sentinel-vision 0.5.3 or newer; None when it can't say. Any program running as the
+        user can add records to the log, so a log filling up may be filled on purpose (INT-N01)."""
+        report = None
+        if self._mod is not None:
+            try:
+                from sentinel_vision.plugin_api import plugin_log  # type: ignore
+
+                report = plugin_log(_PLUGIN_NAME).verify_report()  # 0.5.3 and newer
+            except Exception:
+                report = None
+        if report is None and self._cli:
+            try:
+                out = self._run(["plugin-log", "verify", _PLUGIN_NAME], timeout=60)
+                if out.returncode in (EXIT_OK, EXIT_FOUND):
+                    report = json.loads(out.stdout or "")
+            except Exception:
+                report = None
+        if not isinstance(report, dict):
+            return None
+        used, limit = report.get("bytes"), report.get("limit")
+        if not (_count(used) and _count(limit) and limit > 0):
+            return None  # an older sentinel-vision doesn't report them
+        return {"bytes": used, "limit": limit}
 
     def plugin_log_verify(self) -> dict:
         """Ask sentinel-vision whether Foldward's protected log chain is intact.

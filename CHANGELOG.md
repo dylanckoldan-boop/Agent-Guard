@@ -4,6 +4,29 @@ All notable changes to Foldward are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/). Audit finding IDs are in brackets.
 
+## [0.2.2] - 2026-11-01
+
+Closes the three integration findings of the 1 November 2026 review. Works with sentinel-vision
+0.5.2 or newer; with 0.5.3 or newer Foldward also warns before its protected log is full.
+
+### Security
+- A containment record that can't be copied to sentinel-vision's protected log is no longer lost
+  if Foldward closes first. It is queued in an owner-only file before it is sent, copied oldest
+  first, and retried at most once a minute until sentinel-vision takes it, across restarts. A
+  queue file that can't be read is kept aside and reported. The record is also in Foldward's own
+  signed audit, as before [INT-N02].
+- A full protected log is reported as possible tampering. Any program running as you can add
+  records to that log, so one could fill it to keep containment records out. Foldward now raises
+  a "danger" alert (at most once an hour) and keeps the records queued; with sentinel-vision
+  0.5.3 or newer it also warns when the log is 80% full [INT-N01].
+- Hosted inside sentinel-vision with no command-line tool found, a failed copy reports
+  sentinel-vision's own error instead of "no plugin-log surface available".
+
+### Documents
+- The integration guide lists all seven plugin pages (`ag_alignment` was missing), and a test
+  checks that list against the pages Foldward registers [INT-N03].
+- Install commands name the v0.2.2 tag, and the contract copy matches sentinel-vision 0.5.3.
+
 ## [0.2.1] - 2026-11-01
 
 ### Security
