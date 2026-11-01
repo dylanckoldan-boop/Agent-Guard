@@ -1,35 +1,42 @@
-"""Optional adapter: cryptomigrate.
+"""Optional partner: cryptomigrate — detected, not used yet.
 
-The least runtime-coupled of the partners — it is a notary and a crypto-hygiene
-lens, not a containment mechanism. When present it adds two things:
+cryptomigrate (crypto discovery, migration and signed attestation) is planned as
+Foldward's *notary and crypto-hygiene lens*:
 
-* **crypto_scan(dir)** — run Cryptomigrate's discovery over a flagged agent's
-  install directory to surface a genuinely new risk dimension: an agent that
-  ships hardcoded keys, DES/SHA-1, or phones home over obsolete TLS.
-* **attest(state)** — emit a Cryptomigrate-format, PQ-signed attestation of Foldward's oversight state (audit head, registry size, containment log) for
-  auditors, reusing CM's attestation discipline.
+* **crypto_scan(dir)** (planned) — run cryptomigrate's discovery over a flagged
+  agent's install directory for hardcoded keys, DES/SHA-1 or obsolete TLS.
+  cryptomigrate 1.1 has no single-directory scan that Foldward can call, so this
+  returns a note, not findings.
+* **attest(state)** — Foldward's own attestation of its oversight state (audit
+  head, registry size, containments), signed with its circle key. It always names
+  Foldward as the notary: cryptomigrate takes no part in it yet.
 
-Note: Foldward's own :mod:`foldward.crypto` already produces PQ-signed,
-tamper-evident records, so this adapter adds the *attestation format and rigor*,
-not the cryptography itself. Absent cryptomigrate, ``attest`` still returns a
-self-signed attestation using Foldward's circle signer.
+Detection never imports or runs cryptomigrate (AG-A04): a module that merely has
+its name — a squatted package, a folder planted on the Python path — is never
+executed inside Foldward. ``probe`` only looks it up.
 """
 
 from __future__ import annotations
 
+import importlib.util
+import json
 import shutil
 import time
 
+_PLANNED = "planned: Foldward doesn't call cryptomigrate yet"
+
 
 def probe() -> tuple[bool, str]:
+    """Return (present, how) without importing or running cryptomigrate."""
     try:
-        import cryptomigrate  # noqa: F401
-
-        return True, "in-process (import cryptomigrate)"
-    except Exception:
-        pass
-    if shutil.which("cryptomigrate"):
-        return True, "cli (cryptomigrate)"
+        spec = importlib.util.find_spec("cryptomigrate")
+    except (ImportError, ValueError):
+        spec = None
+    if spec is not None:
+        return True, f"installed ({spec.origin or 'package'}); detected only, not used yet"
+    cli = shutil.which("cryptomigrate")
+    if cli:
+        return True, f"command-line tool {cli}; detected only, not used yet"
     return False, "not installed"
 
 
@@ -38,44 +45,25 @@ def is_present() -> bool:
 
 
 class CryptomigrateAdapter:
-    def __init__(self) -> None:
-        self._mod = None
-        try:
-            import cryptomigrate
-
-            self._mod = cryptomigrate
-        except Exception:
-            self._mod = None
+    """The planned cryptomigrate surface. Nothing here imports or runs cryptomigrate."""
 
     @property
     def available(self) -> bool:
-        return self._mod is not None
+        return False  # nothing is wired to cryptomigrate yet
 
     def crypto_scan(self, directory: str) -> dict:
-        """Surface weak-crypto findings in an agent's directory, if CM is present."""
-        if self._mod is None:
-            return {"available": False, "findings": [], "detail": "cryptomigrate not installed"}
-        try:
-            # CM's discovery entry point varies by version; kept behind a guard.
-            from cryptomigrate.discovery import run as cm_run  # type: ignore
-
-            report = cm_run.scan_path(directory)  # type: ignore[attr-defined]
-            findings = getattr(report, "findings", []) or []
-            return {"available": True, "findings": findings, "detail": f"{len(findings)} finding(s)"}
-        except Exception as exc:
-            return {"available": True, "findings": [], "detail": f"cryptomigrate scan error: {exc}"}
+        """Planned: weak-crypto findings in an agent's directory."""
+        return {"available": False, "findings": [], "detail": _PLANNED}
 
     def attest(self, state: dict, signer) -> dict:
-        """PQ-signed attestation of oversight state. Uses CM's format when present,
-        else a self-signed Foldward attestation."""
+        """Foldward's own attestation of its oversight state, signed with its circle key
+        when the signer can sign (a verifier alone leaves the signature empty)."""
         envelope = {
             "format": "foldward-attestation/1",
             "issued_at": time.time(),
-            "notary": "cryptomigrate" if self._mod is not None else "foldward",
+            "notary": "foldward",
             "state": state,
         }
-        import json
-
         payload = json.dumps(envelope, sort_keys=True).encode()
         envelope["signature"] = signer.sign(payload) if signer.can_sign() else None
         envelope["signer_ref"] = signer.public_ref

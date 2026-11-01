@@ -81,6 +81,9 @@ def _partners_absent(monkeypatch):
     no_cli = types.SimpleNamespace(which=lambda _name, *args, **kwargs: None)
     monkeypatch.setattr(sv_integ, "shutil", no_cli)
     monkeypatch.setattr(cm_integ, "shutil", no_cli)
+    # not hosted by sentinel-vision unless a test says so, and no version answers left over
+    monkeypatch.setattr(sv_integ, "_hosted", False)
+    monkeypatch.setattr(sv_integ, "_version_cache", {})
 
 
 @pytest.fixture

@@ -39,7 +39,7 @@ def test_pacify_suspend_records_audit_revokes_and_marks_contained(response, regi
 
     results = response.pacify(ns, Rung.SUSPEND, auto=True, exe_path=None)
 
-    assert rung_names(results) == ["throttle", "quarantine", "revoke", "suspend"]
+    assert rung_names(results) == ["suspend", "throttle", "quarantine", "revoke"]  # frozen first (AG-N02)
     assert all(isinstance(r, ActionResult) for r in results)
     begin = audit.events("pacify.begin")[0].data
     assert begin == {"agent": "x", "pid": sleeper.pid, "up_to": "SUSPEND", "auto": True}
@@ -118,7 +118,9 @@ def test_every_rung_works_without_a_pid(response, registry, audit, rung):
 
     results = response.pacify(ns, rung, auto=True, exe_path=None)
 
-    assert rung_names(results) == [r.name.lower() for r in Rung if r <= rung]
+    assert rung_names(results) == [r.name.lower() for r in Response.plan(rung)]
+    if rung >= Rung.SUSPEND:
+        assert rung_names(results)[0] == "suspend"  # frozen before anything slow runs (AG-N02)
     for r in Rung:
         assert bool(audit.events(f"pacify.{r.name.lower()}")) is (r <= rung), r.name
     assert registry.is_revoked("y") is (rung >= Rung.REVOKE)

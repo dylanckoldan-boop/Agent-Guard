@@ -24,11 +24,13 @@ from __future__ import annotations
 import ipaddress
 import os
 import re
+import sys
 from dataclasses import dataclass, field
 
 from foldward.align import enabled
 from foldward.config import Settings
 from foldward.identity import Scope
+from foldward.osutil import POSIX_SYSTEM_DIRS, windows_dir
 
 try:
     import psutil
@@ -49,6 +51,7 @@ class ProcessInfo:
     remote_hosts: list[str] = field(default_factory=list)   # "host:port" or "ip:port" it is connected to
     child_count: int = 0
     touched_paths: list[str] = field(default_factory=list)  # recent file paths (best effort)
+    cwd: str = ""  # the process's working directory, used to resolve a relative script path (AG-N02)
 
     @property
     def cmd(self) -> str:
@@ -78,9 +81,12 @@ class DetectedAgent:
         return ", ".join(f"{r.label} (+{r.points})" for r in self.reasons) or "nominal"
 
 
-# Processes that carry "agent" in their name but are ordinary OS plumbing, never
-# AI agents. Matched by executable/command basename so a bare "agent" or "mcp"
-# marker can't be tricked into flagging them (see AG-F02).
+# Ordinary OS daemons that carry "agent" in their name, never AI agents (AG-F02).
+# A process counts as one ONLY when its executable really is the operating system's
+# copy (see _is_verified_system_daemon). Its name, its first argument and even the
+# file name of its executable are all under the process's own control, so none of
+# them can grant an exemption by itself: a rogue agent launched as "ssh-agent", or
+# from a renamed copy of the interpreter, is still checked (AG-N01).
 _SYSTEM_AGENTS = frozenset({
     "ssh-agent", "gpg-agent", "gnome-keyring-daemon", "dbus-daemon", "dbus-launch",
     "polkit-gnome-authentication-agent-1", "at-spi2-registryd", "goa-daemon",
@@ -91,6 +97,26 @@ _WORD = "[a-z0-9]"  # a marker matches only on whole-token boundaries, not as a 
 
 def _basename(p: str) -> str:
     return p.replace("\\", "/").rsplit("/", 1)[-1].lower()
+
+
+def _is_verified_system_daemon(proc: ProcessInfo) -> bool:
+    """True only for a known OS daemon whose executable is the operating system's own
+    file: under System32 on Windows; elsewhere in a root-owned system folder, owned by
+    root and not writable by group or others (AG-N01)."""
+    exe = proc.exe or ""
+    if not exe or _basename(exe) not in _SYSTEM_AGENTS:
+        return False
+    if sys.platform == "win32":
+        root = os.path.normcase(os.path.join(windows_dir(), "System32"))
+        return os.path.normcase(os.path.abspath(exe)).startswith(root + os.sep)
+    real = os.path.realpath(exe)
+    if not any(real.startswith(d + "/") for d in POSIX_SYSTEM_DIRS):
+        return False
+    try:
+        st = os.stat(real)
+    except OSError:
+        return False
+    return st.st_uid == 0 and not (st.st_mode & 0o022)
 
 
 def host_of(hostport: str) -> str:
@@ -105,20 +131,16 @@ def host_of(hostport: str) -> str:
     return s  # bare IPv6, or a host with no port
 
 
-def _is_system_agent(proc: ProcessInfo) -> bool:
-    first = proc.cmdline[0] if proc.cmdline else ""
-    return any(_basename(c) in _SYSTEM_AGENTS for c in (proc.name, proc.exe, first) if c)
-
-
 def looks_like_agent(proc: ProcessInfo, settings: Settings) -> bool:
     """First-pass filter: is this process a candidate AI-agent runtime at all?
 
     Markers and LLM hosts are tunable via settings — this is the net's mesh size —
     but the lists can never be *emptied* to blind the net: Settings.load() restores
     the built-in floor when settings.json tries (see config / AG-F05). Markers match
-    on whole-token boundaries, so ``ssh-agent`` is not ``agent`` and ``--user-agent``
-    is not an agent, and known system daemons are excluded outright (AG-F02)."""
-    if _is_system_agent(proc):
+    on whole-token boundaries, so ``--user-agent`` is not an agent, and the operating
+    system's own daemons are excluded only after their executable is verified
+    (AG-F02, AG-N01)."""
+    if _is_verified_system_daemon(proc):
         return False
     cmd = proc.cmd.lower()
     for marker in settings.agent_markers:
@@ -207,9 +229,8 @@ def _own_pid() -> int:
 
     The detector excludes only this one process so it never flags itself — unlike
     the old rule, which skipped *any* process whose command line merely contained
-    ``foldward`` or ``foldward``. That string match was a blind spot an
-    attacker could hide behind just by passing ``--tag foldward`` (AG-A01 /
-    AG-F01). Foldward watches agents rather than launching them, so a candidate
+    the program's name. That string match was a blind spot an attacker could hide
+    behind just by passing the name as an argument (AG-A01 / AG-F01). Foldward watches agents rather than launching them, so a candidate
     that happens to be a child of the guard is still a candidate."""
     return os.getpid()
 
@@ -283,7 +304,7 @@ class Detector:
                     conns_by_pid.setdefault(c.pid, []).append(hostport)
         except Exception:
             pass
-        for p in psutil.process_iter(["pid", "name", "exe", "cmdline", "username", "create_time"]):
+        for p in psutil.process_iter(["pid", "name", "exe", "cmdline", "username", "create_time", "cwd"]):
             try:
                 info = p.info
                 out.append(
@@ -296,6 +317,7 @@ class Detector:
                         create_time=info.get("create_time") or 0.0,
                         remote_hosts=conns_by_pid.get(info["pid"], []),
                         child_count=len(p.children()) if hasattr(p, "children") else 0,
+                        cwd=info.get("cwd") or "",
                     )
                 )
             except Exception:
@@ -304,23 +326,31 @@ class Detector:
 
     def detect(
         self,
-        sanctioned_pids: dict[int, tuple[str, Scope]] | None = None,
+        sanctioned_pids: dict[int, tuple] | None = None,
         decoy_pids: set[int] | None = None,
     ) -> list[DetectedAgent]:
+        """Score every candidate agent. ``sanctioned_pids`` maps a PID to
+        ``(agent_id, scope)`` or ``(agent_id, scope, start_time)``; with a start time,
+        the process at that PID is sanctioned only if it started then (AG-N04)."""
         sanctioned_pids = sanctioned_pids or {}
         decoy_pids = decoy_pids or set()
         own_pid = _own_pid()
-        file_rule = enabled(self.settings.alignment, "file_access")
         results: list[DetectedAgent] = []
         for proc in self.snapshot_processes():
             if proc.pid == own_pid:
                 continue  # never flag Foldward itself
             if not looks_like_agent(proc, self.settings):
                 continue
-            if file_rule and not proc.touched_paths:  # enrich only candidate agents (open_files is costly)
+            if not proc.touched_paths:
+                # enrich only candidate agents (open_files is costly); always done, so a
+                # canary contact is seen even when the file-access rule is turned off
                 proc.touched_paths = _open_files(proc.pid)
-            sanc = proc.pid in sanctioned_pids
-            agent_id, scope = sanctioned_pids.get(proc.pid, (None, None))
+            entry = sanctioned_pids.get(proc.pid)
+            if entry is not None and len(entry) > 2 and entry[2] is not None:
+                if abs((proc.create_time or 0.0) - entry[2]) > 1.0:
+                    entry = None  # the PID was reused by a later process: not the agent we registered
+            sanc = entry is not None
+            agent_id, scope = (entry[0], entry[1]) if entry is not None else (None, None)
             score, reasons = score_agent(
                 proc,
                 self.settings,

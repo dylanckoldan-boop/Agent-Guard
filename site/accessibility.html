@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accessibility — Foldward</title>
+<meta name="description" content="How the Foldward website and app aim to be usable by everyone, what has been checked, and how to report a barrier.">
+<meta name="color-scheme" content="dark light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="favicon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="bar">
+    <a class="brand" href="index.html" aria-label="Foldward home">
+      <svg viewBox="0 0 28 32" aria-hidden="true" focusable="false"><path d="M14 1 L26 5.5 V15 C26 23 20 29 14 31 C8 29 2 23 2 15 V5.5 Z" fill="none" stroke="#2ee6c5" stroke-width="1.6"/><circle cx="14" cy="14" r="3.2" fill="#2ee6c5"/><path d="M14 17.2 V24" stroke="#2ee6c5" stroke-width="1.4"/></svg>
+      Foldward
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html#how">How it works</a>
+      <a href="index.html#get">Get it</a>
+      <a href="https://github.com/dylanckoldan-boop/Foldward">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap narrow">
+    <section class="no-top">
+      <p class="eyebrow">Accessibility statement</p>
+      <h1 class="page-title">Usable by everyone</h1>
+      <p class="lead">We want this website and the Foldward app to work for everyone, including people who use a screen reader, a keyboard only, zoom or high contrast. We aim to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at level AA.</p>
+
+      <h2 class="mt-xl">This website</h2>
+      <ul class="ticks">
+        <li><strong>Plain, structured pages.</strong> Plain HTML and CSS with headings, landmarks and a &ldquo;Skip to content&rdquo; link; nothing depends on JavaScript.</li>
+        <li><strong>Readable contrast.</strong> Text and links meet a contrast ratio of at least 4.5:1 in both the light and the dark theme; an automated test checks the link colours on every change.</li>
+        <li><strong>Your settings win.</strong> The pages follow your system's light or dark preference and your browser's text size, and reflow to a single column on narrow screens.</li>
+        <li><strong>Pictures have text.</strong> Decorative graphics are hidden from screen readers, and the diagrams have text descriptions.</li>
+      </ul>
+
+      <h2 class="mt-xl">The desktop app</h2>
+      <p class="lead">The app is built with Qt, which works with the screen readers and keyboard navigation of Windows, macOS and Linux. It hasn't had an accessibility review yet.</p>
+
+      <h2 class="mt-xl">Known limits</h2>
+      <ul class="ticks">
+        <li>Neither the website nor the app has had an independent accessibility audit.</li>
+        <li>Colour marks an agent's state in the app; the state is also written in words in the same row.</li>
+      </ul>
+
+      <h2 class="mt-xl">Tell us about a barrier</h2>
+      <p class="lead">If something is hard to use, <a href="https://github.com/dylanckoldan-boop/Foldward/issues">open an issue on GitHub</a> and say which page or screen it was and what got in the way.</p>
+
+      <p class="fineprint mt-xl">This statement is dated 31 October 2026.</p>
+      <p><a href="index.html">← Back to the home page</a></p>
+    </section>
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="flinks">
+      <a href="https://github.com/dylanckoldan-boop/Foldward">Source code</a>
+      <a href="index.html#built">How it's built</a>
+      <a href="https://github.com/dylanckoldan-boop/Foldward/security/advisories/new">Report a vulnerability</a>
+      <a href="terms.html">Terms</a>
+      <a href="accessibility.html">Accessibility</a>
+      <a href="index.html">Home</a>
+      <a href="https://dylanckoldan-boop.github.io/sentinel-vision/">sentinel-vision</a>
+    </div>
+    <p class="fineprint">Foldward 0.2.0 · 31 October 2026</p>
+    <p>MIT licensed · © 2026 Dylan C. Koldan.</p>
+  </div>
+</footer>
+</body>
+</html>

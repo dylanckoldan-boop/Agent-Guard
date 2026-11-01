@@ -55,10 +55,13 @@ class DashboardPage(Page):
         snap = self.guard.snapshot()
         healthy = snap.healthy
         self.hero_title.setText("Net is holding" if snap.contained or snap.flagged else "All clear")
-        self.hero_sub.setText(
+        text = (
             f"{snap.contained} pacified and preserved · {snap.flagged} flagged for review · "
             f"{healthy} healthy · all containment reversible"
         )
+        if snap.warnings:  # start-up problems the operator must see (AG-A09, AG-N04, AG-N05)
+            text += "\n\n" + "\n".join(f"⚠ {w}" for w in snap.warnings)
+        self.hero_sub.setText(text)
         ok = "intact" if snap.audit_ok else "BROKEN"
         self.hero_meta.setText(
             f"consensus core: {snap.mesh.core_state if snap.mesh else 'nominal'}\n"

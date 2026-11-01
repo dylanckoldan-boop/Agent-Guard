@@ -60,8 +60,9 @@ def main() -> None:
     g.audit._entries[1].data.pop("x", None)  # undo tamper for a clean attestation
     att = g.attest()
     print(f"   notary: {att['notary']} | signed: {att['signature'] is not None}")
-    print("\nStandalone — no partners required. With sentinel-vision installed, the")
-    print("binary would be scanned, egress firewalled, and the agent vaulted with rollback.")
+    print("\nStandalone — no partners required. With sentinel-vision installed, a quarantined")
+    print("agent file goes to its vault and each containment is copied to its protected log;")
+    print("a sentinel-vision scan verdict and an automatic egress block are planned, not built.")
 
 
 if __name__ == "__main__":

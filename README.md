@@ -19,24 +19,27 @@ The principle throughout: **don't trust the model to hold a boundary — constra
 
 ## The four layers
 
-Defense in depth — defeating any one layer still leaves the next.
+The layers work independently, so one failing doesn't switch off the others. All of them run with your rights, so a program running as you can interfere with every layer (see [Scope and limitations](#scope-and-limitations)).
 
 | Layer | Name | Role |
 |------:|------|------|
-| 1 | **Admission** | Agents you sanction carry signed, least-privilege identity, checked against the revocation registry; an unregistered agent is flagged, not blocked. |
-| 2 | **The net (tripwire)** | No legitimate workflow opens a planted decoy, so contact *is* an intrusion — a near-zero-false-positive signal (only the bait trips the wire). |
-| 3 | **Pacify ladder** | throttle → quarantine → revoke → suspend → terminate, all inside your own perimeter. |
-| 4 | **Consensus + audit** | A flag contains only after an in-process quorum agrees (a decoy touch is self-authorizing); every step is logged in a hash-chained, tamper-evident chain whose head can be PQ-signed. |
+| 1 | **Admission** | Agents you sanction carry a signed, least-privilege identity bound to their process (PID and start time), checked against the revocation registry; an unregistered agent is flagged, not blocked. |
+| 2 | **The net (tripwire)** | Canary files that no normal workflow opens. An unregistered agent holding one open is contained; a registered agent is flagged for you; other programs (antivirus, backup) are reported, never contained. Canaries are recognised only from the list of files this install planted. |
+| 3 | **Pacify ladder** | throttle → quarantine → revoke → suspend → terminate, all inside your own perimeter. When the ladder reaches suspend, the agent is frozen first. |
+| 4 | **Consensus + audit** | A flag contains only after an in-process quorum agrees (a canary held open by an unregistered agent is self-authorizing); every step is logged in a hash-chained, tamper-evident chain whose head can be PQ-signed. |
 
 ## Install
 
 ```bash
+# a released version, pinned to its tag (never whatever main holds that minute)
+pip install "foldward[gui] @ git+https://github.com/dylanckoldan-boop/Foldward@v0.2.0"
+
+# or, to work on the code
 git clone https://github.com/dylanckoldan-boop/Foldward && cd Foldward
-pip install -e ".[dev]"      # core + tests
-pip install -e ".[gui]"      # add the desktop app (PySide6)
+pip install --require-hashes -r requirements/ci.lock && pip install --no-deps -e .
 ```
 
-Core dependencies are just `psutil` and `cryptography`. Neither partner is pulled in.
+Core dependencies are just `psutil` and `cryptography` (47 or newer, for post-quantum signing). Neither partner is pulled in. Each release on GitHub lists the SHA-256 of its files in `SHA256SUMS.txt`. `foldward-cli update` tells you when a newer release exists and prints the pinned command; it never downloads anything itself.
 
 ## Quick start
 
@@ -85,8 +88,8 @@ Today the mix channel is a **design prototype**: it produces fixed-size, indisti
 
 Foldward runs entirely on its own. When the partners are installed, it opens a port:
 
-- **sentinel-vision** lends its *hands*, each reached through the adapter when it is installed — `scan` an agent's binary for a malware verdict, `block_egress` at the OS firewall, hand the binary to its hardened vault with rollback (the file is moved, not copied), and mirror every containment into its append-only plugin log, which on Windows its protection service keeps so even a program running as you cannot change or delete it. (On macOS and Linux that log is an ordinary user file until the service exists.) Under Route B — implemented in **sentinel-vision 0.4.1** — Foldward's pages appear as a tab *inside* sentinel-vision, with no dependency either way.
-- **cryptomigrate** is the *notary and crypto lens* — scan a flagged agent's directory for weak crypto, and emit PQ-signed attestations of oversight state.
+- **sentinel-vision** lends its *hands* once Foldward has checked it is the real program (its install folder, that only an administrator can change that folder, and version 0.5.2 or newer; standalone, Foldward never imports a package that merely has its name): it takes a contained agent's file into its hardened vault with rollback (the file is moved, not copied; if sentinel-vision refuses a file, Foldward doesn't move it either), and every containment is mirrored into its append-only plugin log, which on Windows its protection service keeps so even a program running as you cannot change or delete it. (On macOS and Linux that log is an ordinary user file until the service exists.) A copy that fails is reported and retried. Planned, not built yet: a malware verdict from sentinel-vision's `scan` used in decisions, and an automatic `block_egress` rung. Foldward's pages also appear as a tab *inside* sentinel-vision (Route B), with no dependency either way.
+- **cryptomigrate** is planned as the *notary and crypto lens* (a weak-crypto scan of a flagged agent's directory, and notarised attestations). Today Foldward only detects it, without importing or running it, and signs its attestations of oversight state itself.
 
 How Foldward plugs into sentinel-vision (the entry point, the `quarantine add` / `plugin-log` / `net block` verbs, and the Windows plugin install) is in [`docs/SENTINEL_VISION_INTEGRATION.md`](docs/SENTINEL_VISION_INTEGRATION.md).
 
@@ -113,7 +116,12 @@ pytest -q
 
 ## Scope and limitations
 
-A research concept and a working v0.1, not a certified safety system. The deception layers (glamour, tripwire) are not safety-rated; against a sufficiently capable agent the glamour degrades — acceptable only because the guarantees live in the pacify ladder, the signed registry, and the independent controls, never in the agent staying fooled. First-pass agent detection is heuristic and tunable. Process control and firewall actions depend on OS privileges.
+A research concept and a working v0.2, not a certified safety system.
+
+- **It runs as you.** Foldward has your privileges, not more. A program running with your rights can interfere with it, read its signing and quarantine keys, and change its saved state (registrations, revocations, canary list, audit). Foldward checks signatures when it loads that state and reports what doesn't verify, but only sentinel-vision's protected log on Windows is out of such a program's reach.
+- **Detection is heuristic and tunable.** A determined agent can evade the first-pass net.
+- **Canaries are seen only while open.** Foldward checks which files agents hold open when it scans (every 2 seconds by default), so an agent that opens, reads and closes a canary between two scans can go unnoticed. The deception layers (glamour, tripwire) are not safety-rated; the guarantees live in the pacify ladder, the signed registry and the independent controls, never in the agent staying fooled.
+- **Process control and firewall actions depend on OS privileges.**
 
 ## How this was built
 

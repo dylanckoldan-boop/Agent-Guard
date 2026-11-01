@@ -19,13 +19,20 @@ from dataclasses import dataclass, field
 
 from foldward import config
 from foldward.config import Settings
-from foldward.crypto import AuditLog, deserialize_signer, new_signer, serialize_signer
+from foldward.crypto import (
+    AuditLog,
+    deserialize_signer,
+    new_signer,
+    post_quantum_available,
+    serialize_signer,
+)
 from foldward.detect import DetectedAgent, Detector, Reason
 from foldward.identity import AgentIdentity, Credential, Scope, TrustDomain
 from foldward.integrations import cryptomigrate as cm_integ
 from foldward.integrations import partner_status
 from foldward.integrations import sentinel_vision as sv_integ
 from foldward.mesh import Consensus, MeshSnapshot, MixChannel
+from foldward.osutil import write_private
 from foldward.quarantine import Quarantine
 from foldward.registry import RevocationRegistry
 from foldward.response import RUNG_BY_NAME, Containment, Response, Rung
@@ -40,46 +47,114 @@ except Exception:  # pragma: no cover
 
 Alert = Callable[[str, str, str], None]  # (title, text, level)
 
-# Interpreters whose *script argument* is the agent, not the interpreter binary.
-# Quarantining the interpreter would neutralize every Python/Node process on the
-# box; the artifact to isolate is the script it was told to run (see AG-A05).
-_INTERPRETERS = frozenset({
-    "python", "pythonw", "py", "node", "nodejs", "deno", "bun",
-    "ruby", "perl", "php", "bash", "sh", "zsh", "dash",
+# Runtimes whose *script argument* is the agent, not the runtime binary. Quarantining
+# the runtime would neutralize every program that uses it (every Python, Node or Java
+# program on the machine), so the artifact to isolate is the script it was told to
+# run, or nothing (AG-A05). For each runtime: the options that mean "no script file"
+# (code given inline, a module or class name), the options that take a separate
+# value, and subcommands that come before the script.
+_RUNTIMES: dict[str, tuple[frozenset[str], frozenset[str], frozenset[str]]] = {}
+
+
+def _runtime(names: str, no_script: str = "", takes_value: str = "", subcommands: str = "") -> None:
+    rule = (frozenset(no_script.split()), frozenset(takes_value.split()), frozenset(subcommands.split()))
+    for n in names.split():
+        _RUNTIMES[n] = rule
+
+
+_runtime("python pythonw py", "-m -c", "-W -X --check-hash-based-pycs")
+_runtime("node nodejs", "-e --eval -p --print", "-r --require --import --loader --experimental-loader -C --conditions")
+_runtime("deno", "eval", "--config -c --import-map --location --cert --seed --v8-flags", "run test bench serve")
+_runtime("bun", "-e --eval -p --print", "-r --preload --cwd --env-file", "run x")
+_runtime("ruby", "-e", "-r -I -C -E")
+_runtime("perl", "-e -E", "-I -M -m")
+_runtime("php", "-r -a", "-c -d -z")
+_runtime("bash sh zsh dash ksh fish tcsh csh", "-c", "-o -O --rcfile --init-file")
+_runtime("java javaw", "-m --module", "-cp -classpath --class-path -p --module-path --add-modules")
+_runtime("dotnet mono", "", "", "exec")
+_runtime("cscript wscript", "", "")
+_runtime("osascript", "-e", "-l -s")
+_runtime("rscript", "-e --expr", "")
+_runtime("julia", "-e --eval -E --print", "-L --load -J --sysimage")
+_runtime("lua luajit", "-e", "-l")
+_runtime("tclsh wish", "", "")
+# PowerShell and cmd: only an explicit script file counts (-File); a command line
+# given inline has no file to isolate.
+_POWERSHELL = frozenset({"powershell", "pwsh"})
+_NO_SCRIPT_EVER = frozenset({"cmd"})
+# Launchers start the real runtime as a child; the launcher binary is shared tooling.
+_LAUNCHERS = frozenset({
+    "uv", "uvx", "npx", "npm", "pnpm", "yarn", "pipx", "poetry", "pdm", "hatch", "conda", "mamba", "bunx",
 })
+
+
+def _runtime_name(path: str) -> str:
+    base = os.path.basename(path.replace("\\", "/")).lower()
+    if base.endswith(".exe"):
+        base = base[:-4]
+    return base.rstrip("0123456789.-") or base
 
 
 def _is_interpreter(path: str) -> bool:
     if not path:
         return False
-    base = os.path.basename(path).lower()
-    if base.endswith(".exe"):
-        base = base[:-4]
-    return base in _INTERPRETERS or base.rstrip("0123456789.") in _INTERPRETERS
+    name = _runtime_name(path)
+    return name in _RUNTIMES or name in _POWERSHELL or name in _NO_SCRIPT_EVER or name in _LAUNCHERS
 
 
-def _script_from_cmdline(cmdline: list[str]) -> str | None:
-    """The script path an interpreter was told to run: the first positional
-    argument after the interpreter. ``-m module`` has no script file to isolate."""
-    for arg in cmdline[1:]:
-        if arg == "-m":
-            return None
-        if arg.startswith("-"):
+def _script_from_cmdline(cmdline: list[str], runtime: str = "python") -> str | None:
+    """The script file a runtime was told to run, or None when there is none (code
+    given inline, a module or class name, a launcher)."""
+    if runtime in _LAUNCHERS or runtime in _NO_SCRIPT_EVER:
+        return None
+    args = list(cmdline[1:])
+    if runtime in _POWERSHELL:
+        for i, a in enumerate(args):
+            if a.lower() in ("-file", "-f") and i + 1 < len(args):
+                return args[i + 1]
+        return None
+    no_script, takes_value, subcommands = _RUNTIMES.get(runtime, _RUNTIMES["python"])
+    skip_next = False
+    seen_positional = False
+    for a in args:
+        if skip_next:
+            skip_next = False
             continue
-        return arg
+        if a in no_script:
+            return None
+        if runtime in ("java", "javaw") and a == "-jar":
+            continue  # the next argument is the jar: the agent's own file
+        if a in takes_value:
+            skip_next = True
+            continue
+        if a.startswith("//") and runtime in ("cscript", "wscript"):
+            continue
+        if a.startswith("-"):
+            continue
+        if not seen_positional and a.lower() in subcommands:
+            seen_positional = True
+            continue
+        return a
     return None
 
 
 def _quarantine_target(proc) -> str | None:
-    """What to quarantine for a process: the agent's own binary, or — when it is
-    run by an interpreter — the script, never the shared interpreter (AG-A05)."""
+    """What to quarantine for a process: the agent's own binary, or — when it is run
+    by a shared runtime — the script, never the runtime itself (AG-A05). A relative
+    script path is resolved against the *agent's* working directory; without it
+    nothing is returned, so Foldward never acts on a same-named file in its own
+    folder (AG-N02)."""
     exe = getattr(proc, "exe", None) or ""
     cmdline = list(getattr(proc, "cmdline", None) or [])
-    if _is_interpreter(exe) or (not exe and cmdline and _is_interpreter(cmdline[0])):
-        # The script the interpreter runs, or None for a `-m module` run — NEVER
-        # the interpreter itself. Quarantining the shared interpreter would take
-        # out every Python/Node process on the box (AG-A05).
-        return _script_from_cmdline(cmdline)
+    runtime_path = exe or (cmdline[0] if cmdline else "")
+    if _is_interpreter(runtime_path):
+        script = _script_from_cmdline(cmdline, _runtime_name(runtime_path))
+        if not script:
+            return None
+        if os.path.isabs(script):
+            return script
+        cwd = getattr(proc, "cwd", "") or ""
+        return os.path.normpath(os.path.join(cwd, script)) if cwd and os.path.isabs(cwd) else None
     return exe or None
 
 
@@ -96,11 +171,19 @@ class GuardSnapshot:
     partners: dict
     detections: list = field(default_factory=list)
     mesh: MeshSnapshot | None = None
+    warnings: list = field(default_factory=list)
 
 
 class Foldward:
+    # Time allowed per scan for checking whether programs that are not agent
+    # candidates hold a canary open (AG-A02); the sweep resumes where it stopped.
+    SWEEP_BUDGET_S = 0.5
+
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or Settings.load()
+        # Problems found at start-up that the operator should see: shown by `status`,
+        # on the Overview page, and in the audit (AG-A09, AG-N04, AG-N05).
+        self.warnings: list[str] = []
         # trust fabric — persisted under the data root so the circle's keypair,
         # the audit chain and the revocation set all survive a restart (AG-A03).
         state = config.sub_dir("state")
@@ -109,7 +192,7 @@ class Foldward:
         self.trust = TrustDomain(self.signer)
         self.registry = RevocationRegistry(self.signer.verifier(), self.audit, path=state / "revocations.json")
         # net
-        self.tripwire = Tripwire(self.audit)
+        self.tripwire = Tripwire(self.audit, path=state / "canaries.json")
         self.quarantine = Quarantine()
         self.detector = Detector(self.settings)
         # mesh
@@ -117,21 +200,25 @@ class Foldward:
         self.mix = MixChannel(enabled=self.settings.mix_oversight_traffic, min_cover=self.settings.mix_min_cover)
         # partners + pacify ladder
         self.partners = partner_status()
+        self.sv = sv_integ.SentinelVisionAdapter() if self.partners.sentinel_vision else None
         self.containment: Containment = (
-            sv_integ.make_containment(self.quarantine)
-            if self.partners.sentinel_vision
+            sv_integ.make_containment(self.quarantine, self.sv)
+            if self.sv is not None
             else Containment(self.quarantine)
         )
-        # kept for mirroring containment records into sentinel-vision's protected log
-        self.sv = sv_integ.SentinelVisionAdapter() if self.partners.sentinel_vision else None
         self.response = Response(self.registry, self.signer, self.audit, self.containment, escalate=self._escalate)
         # state
         self._sanctioned: dict[str, AgentIdentity] = {}
         self._suspended: dict[int, DetectedAgent] = {}  # agents we froze, re-checked each scan (AG-A08)
         self._detections: list[DetectedAgent] = []
+        self._observed: set[tuple[int, str]] = set()  # (pid, canary) contacts already reported
+        self._stale_reported: set[tuple[str, int]] = set()
+        self._sweep_cursor = 0
+        self._pending_mirror: list[dict] = []  # protected-log records still to be copied (INT-05)
         self.alert_listeners: list[Alert] = []
         self._lock = threading.Lock()
         self._load_agents()  # restore sanctioned identities from a previous run
+        self._startup_checks()
         self.audit.append("guard.start", {"scheme": self.signer.scheme, "partners": self.partners.__dict__})
 
     # ------------------------------------------------------------------ persistence
@@ -144,17 +231,43 @@ class Foldward:
             try:
                 return deserialize_signer(json.loads(p.read_text("utf-8")))
             except Exception:
-                pass  # unreadable/stale keystore: mint a fresh authority below
+                self.warnings.append(
+                    "The saved signing key couldn't be read, so a new one was made. Agents registered "
+                    "before need to be registered again."
+                )
         signer = new_signer(self.settings.signer_scheme)
         try:
-            tmp = p.with_suffix(".tmp")
-            tmp.write_text(json.dumps(serialize_signer(signer)), "utf-8")
-            tmp.replace(p)
-            if os.name == "posix":
-                p.chmod(0o600)
+            write_private(p, json.dumps(serialize_signer(signer)).encode())  # owner-only from the start
         except OSError:
             pass
         return signer
+
+    def _startup_checks(self) -> None:
+        if self.audit.load_problem:
+            kept = f" It was kept as {self.audit.kept_as}." if self.audit.kept_as else ""
+            self.warnings.append(f"The audit log was damaged: {self.audit.load_problem}.{kept}")
+            self.audit.append("audit.recovered", {"problem": self.audit.load_problem, "kept_as": self.audit.kept_as})
+        else:
+            ok, at = self.audit.verify()
+            if not ok:
+                self.warnings.append(f"The audit log's hash chain is broken at entry {at}: it was changed outside Foldward.")
+        if self.registry.rejected_on_load:
+            self.warnings.append(
+                f"{self.registry.rejected_on_load} saved revocation(s) had no valid signature and were ignored."
+            )
+        if "ML-DSA" not in self.signer.scheme:
+            if post_quantum_available():
+                self.warnings.append(
+                    f"This install's signing key is {self.signer.scheme}, made without ML-DSA. Post-quantum signing "
+                    "is off until a new key is made (see SECURITY.md, 'Signing keys')."
+                )
+            else:
+                self.warnings.append(
+                    f"Post-quantum signing is unavailable: this Python's `cryptography` package has no ML-DSA, so "
+                    f"Foldward signs with {self.signer.scheme} only. Install cryptography 47 or newer."
+                )
+        for w in self.warnings:
+            self.audit.append("guard.warning", {"text": w})
 
     def _agents_path(self):
         return config.sub_dir("state") / "agents.json"
@@ -166,6 +279,7 @@ class Foldward:
             return
         if not isinstance(raw, list):
             return
+        rejected = 0
         for a in raw:
             try:
                 sc = a["scope"]
@@ -174,11 +288,29 @@ class Foldward:
                     frozenset(sc["paths"]), bool(sc["spawn"]),
                 )
                 cred = Credential(a["agent_id"], scope, a["issuer_ref"], a["issued_at"], a["signature"])
-                self._sanctioned[a["agent_id"]] = AgentIdentity(
-                    a["agent_id"], a["label"], cred, a.get("pid"), a.get("registered_at", time.time())
-                )
-            except (KeyError, TypeError):
+                ct = a.get("pid_create_time")
+                ct = float(ct) if isinstance(ct, (int, float)) and not isinstance(ct, bool) else None
+            except (KeyError, TypeError, ValueError):
+                rejected += 1
                 continue
+            # The saved file is only as trustworthy as the folder it sits in, so every
+            # credential is verified again before it can sanction anything (AG-N04).
+            try:
+                valid = self.trust.verify(cred)
+            except Exception:
+                valid = False
+            if not valid:
+                rejected += 1
+                self.audit.append("admission.rejected", {"agent": a.get("agent_id"), "reason": "bad_signature_on_disk"})
+                continue
+            self._sanctioned[a["agent_id"]] = AgentIdentity(
+                a["agent_id"], a.get("label", ""), cred, a.get("pid"), a.get("registered_at", time.time()), ct
+            )
+        if rejected:
+            self.warnings.append(
+                f"{rejected} saved agent registration(s) had no valid signature and were ignored. If you didn't "
+                "change state/agents.json yourself, another program did."
+            )
 
     def _save_agents(self) -> None:
         data = []
@@ -186,6 +318,7 @@ class Foldward:
             s = i.credential.scope
             data.append({
                 "agent_id": i.agent_id, "label": i.label, "pid": i.pid, "registered_at": i.registered_at,
+                "pid_create_time": i.pid_create_time,
                 "issuer_ref": i.credential.issuer_ref, "issued_at": i.credential.issued_at,
                 "signature": i.credential.signature,
                 "scope": {
@@ -194,18 +327,28 @@ class Foldward:
                 },
             })
         try:
-            p = self._agents_path()
-            tmp = p.with_suffix(".tmp")
-            tmp.write_text(json.dumps(data), "utf-8")
-            tmp.replace(p)
+            write_private(self._agents_path(), json.dumps(data).encode())
         except OSError:
             pass
 
     # ------------------------------------------------------------------ admission
-    def register_agent(self, label: str, scope: Scope, pid: int | None = None) -> AgentIdentity:
+    def register_agent(
+        self, label: str, scope: Scope, pid: int | None = None, *, create_time: float | None = None
+    ) -> AgentIdentity:
+        """Sanction an agent. With ``pid``, the identity is bound to that running
+        process: its start time is recorded, and a later process that reuses the PID
+        is not sanctioned (AG-N04). ``create_time`` may be given when the caller
+        already knows it; otherwise it is read from the live process."""
+        if pid is not None and create_time is None:
+            if not _HAVE_PSUTIL:
+                raise ValueError("binding a registration to a PID needs psutil")
+            try:
+                create_time = psutil.Process(pid).create_time()
+            except Exception as exc:
+                raise ValueError(f"no running process with pid {pid}") from exc
         agent_id = f"agent-{len(self._sanctioned) + 1}-{int(time.time())}"
         cred = self.trust.issue(agent_id, scope)
-        ident = AgentIdentity(agent_id, label, cred, pid)
+        ident = AgentIdentity(agent_id, label, cred, pid, pid_create_time=create_time)
         self._sanctioned[agent_id] = ident
         self._save_agents()
         self.audit.append("admission.registered", {"agent": agent_id, "label": label, "pid": pid})
@@ -214,11 +357,11 @@ class Foldward:
     def sanctioned(self) -> list[AgentIdentity]:
         return list(self._sanctioned.values())
 
-    def _sanctioned_pids(self) -> dict[int, tuple[str, Scope]]:
+    def _sanctioned_pids(self) -> dict[int, tuple[str, Scope, float | None]]:
         return {
-            i.pid: (i.agent_id, i.credential.scope)
+            i.pid: (i.agent_id, i.credential.scope, i.pid_create_time)
             for i in self._sanctioned.values()
-            if i.pid is not None and not self.registry.is_revoked(i.agent_id)
+            if i.pid is not None and i.pid_create_time is not None and not self.registry.is_revoked(i.agent_id)
         }
 
     # ------------------------------------------------------------------ the net
@@ -232,12 +375,35 @@ class Foldward:
         oversight records through the mix channel."""
         with self._lock:
             self._recheck_suspended()  # re-freeze anything resumed since the last scan (AG-A08)
-            detections = self.detector.detect(self._sanctioned_pids(), decoy_pids)
+            self._retry_mirrors()
+            sanctioned = self._sanctioned_pids()
+            detections = self.detector.detect(sanctioned, decoy_pids)
+            self._report_stale_pids(detections, sanctioned)
             for d in detections:
                 self._note_canary_contact(d)  # a touched canary is a decoy hit (AG-A02)
                 self._evaluate(d)
+            self._sweep_canaries({d.pid for d in detections})
             self._detections = detections
             return detections
+
+    def _report_stale_pids(self, detections: list[DetectedAgent], sanctioned: dict) -> None:
+        """A registered PID now held by a different process is not sanctioned; say so
+        once, so the operator knows why a registered agent shows as unregistered."""
+        for d in detections:
+            entry = sanctioned.get(d.pid)
+            if entry is None or d.sanctioned:
+                continue
+            key = (entry[0], d.pid)
+            if key in self._stale_reported:
+                continue
+            self._stale_reported.add(key)
+            self.audit.append("admission.stale_pid", {"agent": entry[0], "pid": d.pid})
+            self._alert(
+                "Registration doesn't match this process",
+                f"PID {d.pid} was registered for {entry[0]}, but it now belongs to a process that started later. "
+                "It is treated as unregistered; register the agent again if it was restarted.",
+                "warning",
+            )
 
     def _note_canary_contact(self, d: DetectedAgent) -> None:
         if any(r.kind == "tripwire" for r in d.reasons):
@@ -250,6 +416,46 @@ class Foldward:
                 d.reasons = [Reason("touched a decoy / honeytoken", 100, "tripwire")]
                 d.state = "flagged"
                 return
+
+    def _sweep_canaries(self, candidates: set[int]) -> None:
+        """Report canary contact by programs that are not agent candidates — an
+        antivirus, an indexer or a backup tool. They are shown, never contained
+        (AG-A02). Bounded by SWEEP_BUDGET_S per scan; it resumes where it stopped."""
+        if not _HAVE_PSUTIL or not self.tripwire.has_canaries:
+            return
+        own = os.getpid()
+        try:
+            pids = sorted(p for p in psutil.pids() if p not in candidates and p != own)
+        except Exception:
+            return
+        if not pids:
+            return
+        start = next((i for i, p in enumerate(pids) if p > self._sweep_cursor), 0)
+        order = pids[start:] + pids[:start]
+        deadline = time.monotonic() + self.SWEEP_BUDGET_S
+        for pid in order:
+            if time.monotonic() > deadline:
+                break
+            self._sweep_cursor = pid
+            try:
+                proc = psutil.Process(pid)
+                files = proc.open_files()
+                name = proc.name()
+            except Exception:
+                continue
+            for f in files:
+                decoy_id = self.tripwire.is_canary(f.path)
+                if decoy_id and (pid, decoy_id) not in self._observed:
+                    self._observed.add((pid, decoy_id))
+                    self.tripwire.on_observed(decoy_id, pid, f"{name} opened {f.path}")
+                    self._alert(
+                        "Canary opened by a program that isn't an agent",
+                        f"{name} (pid {pid}) opened {f.path}. Reported only: Foldward never contains programs "
+                        "that aren't agents.",
+                        "warning",
+                    )
+        else:
+            self._sweep_cursor = 0  # full pass done: start over next scan
 
     def _recheck_suspended(self) -> None:
         """Re-freeze any agent we suspended that has since been resumed — by the
@@ -292,9 +498,21 @@ class Foldward:
             d.state = "flagged"
             self.audit.append("detect.flagged", {"pid": d.pid, "score": d.score, "why": d.why})
             self._alert("Rogue agent flagged", f"{d.label} (pid {d.pid}) — {d.why}", "warning" if d.score < 85 else "danger")
-        # auto-contain only on a decoy touch (zero-false-positive signal)
         if decoy and self.settings.auto_contain_on_decoy:
-            self.pacify(d, auto=True)
+            if d.sanctioned:
+                # A sanctioned agent is never contained automatically on a canary hit:
+                # another program can put bait where a legitimate agent works, which
+                # would turn the tripwire against it (AG-N03). The operator decides.
+                self.audit.append("detect.decoy_sanctioned", {"agent": d.agent_id, "pid": d.pid})
+                self._alert(
+                    "Sanctioned agent opened a canary",
+                    f"{d.label} (pid {d.pid}, {d.agent_id}) opened a canary. It was not contained automatically "
+                    "because it is registered; check it and contain it from The Net if needed.",
+                    "danger",
+                )
+            else:
+                # auto-contain only an unregistered agent on a decoy touch
+                self.pacify(d, auto=True)
         elif decision.contain and not self.settings.report_only:
             self.pacify(d, auto=True)
 
@@ -328,13 +546,39 @@ class Foldward:
     def _mirror_to_protected_log(self, record: dict) -> None:
         """When sentinel-vision is present, also append the record to its
         tamper-proof, append-only plugin log, so a compromised agent cannot erase
-        its own containment record even if it reaches Foldward's own store."""
+        its own containment record even if it reaches Foldward's own store. A copy
+        that fails is reported and retried at the next scan (INT-05)."""
         if self.sv is None:
             return
+        ok, detail = self._try_mirror(record)
+        if not ok:
+            self._pending_mirror.append(record)
+            self.audit.append("mirror.failed", {"detail": detail, "pending": len(self._pending_mirror)})
+            self._alert(
+                "Containment record not yet protected",
+                f"It couldn't be copied to Sentinel Vision's protected log ({detail}). Foldward will retry; "
+                "the record is in Foldward's own audit meanwhile.",
+                "warning",
+            )
+
+    def _try_mirror(self, record: dict) -> tuple[bool, str]:
         try:
-            self.sv.plugin_log_append(record)
-        except Exception:
-            pass
+            res = self.sv.plugin_log_append(record)
+        except Exception as exc:
+            return False, str(exc)
+        return bool(getattr(res, "ok", False)), str(getattr(res, "detail", res))
+
+    def _retry_mirrors(self) -> None:
+        if self.sv is None or not self._pending_mirror:
+            return
+        still: list[dict] = []
+        for record in self._pending_mirror:
+            ok, _detail = self._try_mirror(record)
+            if ok:
+                self.audit.append("mirror.retried", {"agent": record.get("agent")})
+            else:
+                still.append(record)
+        self._pending_mirror = still
 
     def release(self, d: DetectedAgent):
         res = self.response.release(d)
@@ -382,6 +626,7 @@ class Foldward:
             partners=self.partners.__dict__,
             detections=dets,
             mesh=mesh,
+            warnings=list(self.warnings),
         )
 
     # ------------------------------------------------------------------ alerts
@@ -392,7 +637,7 @@ class Foldward:
             try:
                 fn(title, text, level)
             except Exception:
-                pass
+                continue
 
     def _escalate(self, ev: dict) -> None:
         self._alert("Escalated to operator", f"agent {ev.get('agent')} contained ({ev.get('up_to')})", "warning")

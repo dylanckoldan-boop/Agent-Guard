@@ -4,7 +4,7 @@
 
 Please report security vulnerabilities **privately**, not in a public issue. Use
 GitHub's private vulnerability reporting — the **Report a vulnerability** button
-under this repository's **Security** tab — or contact the maintainer directly.
+under this repository's **Security** tab.
 
 Include what you found, how to reproduce it, and the potential impact.
 
@@ -16,8 +16,9 @@ Our targets, for a project at this stage:
 - **Coordinated disclosure within 90 days** by default; sooner for a simple fix,
   and we will agree timing with you.
 
-If private vulnerability reporting is unavailable to you, contact the maintainer
-at **&lt;security contact — owner to set&gt;**.
+If private vulnerability reporting is unavailable to you, open an issue titled
+"Security contact request" with no details of the problem, and the maintainer will
+reply with a private way to send them.
 
 ### Supported versions
 
@@ -43,17 +44,31 @@ that "hack-back" is out of scope by design.
 
 - **No secrets in the repo, all state on-device.** Foldward's settings, its
   circle signing key, the agents you register, the revocation registry, the
-  hash-chained audit and the quarantine store (with its key) all live in your own
-  per-user data directory, readable only by you. Nothing is uploaded, and nothing
-  is committed to the repository.
+  planted-canary list, the hash-chained audit and the quarantine store (with its
+  key) all live in your own per-user data folder. Other user accounts can't read
+  it; programs running as you can. Key and state files are created owner-only from
+  the moment they exist. Registrations and revocations are checked against the
+  circle signature when they are loaded, so a hand-edited entry is ignored and
+  reported rather than trusted. Nothing is uploaded, and nothing is committed to
+  the repository.
+- **Signing keys.** A new install signs with ML-DSA-65 + Ed25519 when its
+  `cryptography` package (47 or newer) supports ML-DSA. An install whose key was
+  made without ML-DSA keeps using it and says so in `foldward-cli status` and on
+  the Overview page. To make a new key, quit Foldward, move `keys/circle.json` out
+  of the data folder, and start it again; agents registered before must then be
+  registered again.
 - **Signatures** use a hybrid ML-DSA-65 (FIPS 204) + Ed25519 scheme; a signature
   verifies only if both components verify. The revocation registry rejects any
   revocation without a valid circle signature, so it cannot be weaponized into a
   denial-of-service.
-- **Supply chain.** CI runs `ruff` and the full test suite on every push and pull
-  request; CodeQL scans the code; Dependabot proposes dependency and action
-  updates weekly; workflow actions are pinned to commit SHAs; and CI runs
-  `pip-audit` as an advisory dependency scan.
+- **Supply chain.** CI installs from a hash-locked requirements file
+  (`requirements/ci.lock`), runs `ruff` with its security rules and the full test
+  suite on every push and pull request, and fails when `pip-audit` finds a known
+  vulnerability in the locked dependencies; CodeQL scans the code; Dependabot
+  proposes dependency and action updates weekly; workflow actions are pinned to
+  commit SHAs. Releases are built from a tag by `release.yml`, which publishes the
+  wheel and source archive with their SHA-256 in `SHA256SUMS.txt`, and install
+  commands name a release tag, never the moving `main` branch.
 
 ## Website
 

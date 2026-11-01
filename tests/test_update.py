@@ -26,7 +26,8 @@ def test_a_newer_release_is_offered_with_the_install_command():
 
     assert st.available is True
     assert st.latest == "99.0.0"
-    assert INSTALL_COMMAND in st.detail
+    assert st.install_command == 'pip install --upgrade "foldward @ git+https://github.com/dylanckoldan-boop/Foldward@v99.0.0"'
+    assert st.install_command in st.detail
 
 
 def test_the_current_version_is_up_to_date():

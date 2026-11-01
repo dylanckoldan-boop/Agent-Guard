@@ -116,8 +116,8 @@ healthy agents) nor forge an "all-clear" to quietly un-revoke a contained agent.
 a SHA-256 chain; any edit, deletion or reorder breaks verification. The chain
 head can be signed with a hybrid **ML-DSA-65 (FIPS 204) + Ed25519** signature, so
 an auditor gets both integrity and origin. Two-audience by design: opaque to a
-triggering agent, transparent to the human circle. Same mechanism as the
-Cryptomigrate project's attestation log.
+triggering agent, transparent to the human circle. The hash chain is the same
+idea as the Cryptomigrate project's audit log, which is chained but not signed.
 
 ## The "many doors" principle — control plane vs data plane
 
@@ -184,17 +184,13 @@ dependency, not an optional extra. Only a guarded `import` / CLI probe in
 
 When installed alongside it, each is a pure upgrade:
 
-**sentinel-vision** (the hands) — via a guarded `import sentinel_vision` or
-`sentinel-vision-cli`:
-* **scan(binary)** can turn "behaved oddly" into a verdict — known malware,
-  validly signed, or clean. Available through the adapter; not yet invoked
-  automatically in the scan loop.
-* **block_egress(ip)** is a real system-wide OS-firewall block against known
-  criminal netblocks. The hook exists for a future "cut egress" rung; the pacify
-  ladder does not climb to it automatically yet.
-* **quarantine add (binary)** hands the neutralized binary to SV's hardened,
-  service-protected vault with rollback — the file is moved, and SV becomes the
-  system-of-record.
+**sentinel-vision** (the hands) — reached only after Foldward checks it is the real
+program: its own package when sentinel-vision hosts Foldward as a plugin, otherwise
+`sentinel-vision-cli` from its install folder (owner-checked, version 0.5.2 or newer;
+see `docs/SENTINEL_VISION_INTEGRATION.md`):
+* **quarantine add (binary or script)** hands the contained agent's file to SV's
+  hardened, service-protected vault with rollback — the file is moved, and SV
+  becomes the system-of-record. A refusal from SV is final.
 * **protected plugin log** — Foldward mirrors every containment (with its
   signed audit head) into SV's append-only `plugin-log`, which on Windows the
   protection service keeps where a program running as the user can add and read
@@ -203,12 +199,19 @@ When installed alongside it, each is a pure upgrade:
   Layer-4 Wall: made true at the OS level rather than by an un-passed reference.
   (SV's `config.plugin_dir` is an ordinary user folder and is deliberately *not*
   used for these records.)
+* **block_egress(ip)** (planned) — a real system-wide OS-firewall block; the hook
+  exists, but the pacify ladder doesn't climb to it automatically yet.
+* **scan(binary)** (planned) — a malware verdict from SV's engines; available
+  through the adapter, not yet used in decisions.
 
-**cryptomigrate** (the notary and crypto lens):
-* **crypto_scan(dir)** surfaces weak crypto (hardcoded keys, DES/SHA-1, obsolete
-  TLS) in a flagged agent's install directory — a genuinely new risk dimension.
-* **attest(state)** emits a PQ-signed attestation of oversight state in CM's
-  format for auditors.
+**cryptomigrate** (planned as the notary and crypto lens; today it is only
+detected, by looking it up without importing or running it):
+* **crypto_scan(dir)** (planned) — weak crypto (hardcoded keys, DES/SHA-1,
+  obsolete TLS) in a flagged agent's install directory. cryptomigrate 1.1 has no
+  single-directory scan Foldward can call yet.
+* **attest(state)** — Foldward's own attestation of its oversight state, signed
+  with its circle key; it always names Foldward as the notary. Notarisation in
+  cryptomigrate's format is planned.
 
 Division of labour: **Foldward is the brain** (detect, decide, contain);
 **sentinel-vision lends its hands** (scan, block, vault, the Wall);
