@@ -11,7 +11,9 @@ Foldward has checked that it is talking to the real program (AG-A04, INT-02, INT
   ``/Applications/SentinelVision.app/Contents/MacOS`` on macOS, ``/opt/SentinelVision``
   on Linux) — never from ``$PATH`` and never as an importable package that merely has
   the right name. On macOS and Linux the tool and its folder must belong to root and
-  be closed to writes by others; it must report version 0.5.1 or newer.
+  be closed to writes by others; it must report version 0.5.2 or newer (the first
+  whose `quarantine add --reason TEXT -- PATH` parses on every supported Python and
+  that answers a refusal with exit 3).
 
 What Foldward uses — the plugin contract in sentinel-vision's ``docs/PLUGINS.md``,
 whose exit codes are 0 success, 1 threats found or a broken chain, 2 error, and,
@@ -50,7 +52,7 @@ from foldward.response import Containment
 _CLI = "sentinel-vision-cli"
 _PLUGIN_NAME = "foldward"  # the name sentinel-vision files Foldward's records under
 _LEGACY_PLUGIN_NAME = "agent-guard"  # the pre-rename name; still read & verified so old records aren't orphaned
-MIN_VERSION = (0, 5, 1)
+MIN_VERSION = (0, 5, 2)
 _ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _VERSION_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 # exit codes of sentinel-vision-cli (docs/PLUGINS.md)

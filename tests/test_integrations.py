@@ -213,13 +213,14 @@ def test_an_install_folder_others_can_change_is_not_trusted(sv_cli, monkeypatch)
     assert type(sentinel_vision.make_containment(None)) is Containment
 
 
-def test_a_sentinel_vision_older_than_0_5_1_is_not_used(sv_cli):
-    sv_cli.version = "0.4.1"
+def test_a_sentinel_vision_older_than_0_5_2_is_not_used(sv_cli):
+    # 0.5.1 can't parse `quarantine add --reason TEXT -- PATH` on older Pythons and has no exit 3
+    sv_cli.version = "0.5.1"
 
     present, how = sentinel_vision.probe()
 
     assert present is False
-    assert "needs 0.5.1 or newer" in how
+    assert "needs 0.5.2 or newer" in how
 
 
 def test_the_guard_swaps_in_sentinel_vision_containment_when_it_is_present(sv_cli):

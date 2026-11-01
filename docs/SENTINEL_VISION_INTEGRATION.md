@@ -5,8 +5,9 @@ sentinel-vision's own contract is in that project's
 [`docs/PLUGINS.md`](https://github.com/dylanckoldan-boop/sentinel-vision/blob/main/docs/PLUGINS.md),
 and its machine-readable form, [`docs/plugin-contract.json`](https://github.com/dylanckoldan-boop/sentinel-vision/blob/main/docs/plugin-contract.json),
 is copied into this repository as `tests/data/sentinel_vision_contract.json` and replayed
-by `tests/test_sentinel_vision_contract.py`. Foldward 0.2.0 is tested against
-sentinel-vision 0.5.2 and needs 0.5.1 or newer.
+by `tests/test_sentinel_vision_contract.py`. Foldward 0.2.0 needs sentinel-vision
+0.5.2 or newer: 0.5.1 has no exit code 3, and on Python 3.10, 3.11 and early 3.12 it
+can't parse `quarantine add --reason TEXT -- PATH`.
 
 The rule in both directions: **neither project depends on the other.** Foldward
 imports nothing from sentinel-vision at module scope; sentinel-vision imports
@@ -26,7 +27,7 @@ trusts (AG-A04, INT-02, INT-03):
 
 On macOS and Linux the tool and every folder up to the install folder must belong
 to root and be closed to writes by group and others, as sentinel-vision's install
-steps leave them. The tool must report version 0.5.1 or newer. `foldward-cli status`
+steps leave them. The tool must report version 0.5.2 or newer. `foldward-cli status`
 shows the path and version it found, or why it didn't trust what it found.
 
 ## 1. A page inside sentinel-vision

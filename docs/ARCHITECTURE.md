@@ -186,7 +186,7 @@ When installed alongside it, each is a pure upgrade:
 
 **sentinel-vision** (the hands) — reached only after Foldward checks it is the real
 program: its own package when sentinel-vision hosts Foldward as a plugin, otherwise
-`sentinel-vision-cli` from its install folder (owner-checked, version 0.5.1 or newer;
+`sentinel-vision-cli` from its install folder (owner-checked, version 0.5.2 or newer;
 see `docs/SENTINEL_VISION_INTEGRATION.md`):
 * **quarantine add (binary or script)** hands the contained agent's file to SV's
   hardened, service-protected vault with rollback — the file is moved, and SV

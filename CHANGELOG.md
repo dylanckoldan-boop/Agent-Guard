@@ -7,7 +7,8 @@ All notable changes to Foldward are listed here. The format follows
 ## [0.2.0] - 2026-10-31
 
 This release closes the findings of the 31 October 2026 audit and makes Foldward's
-claims match the code. Works with sentinel-vision 0.5.1 and newer; tested with 0.5.2.
+claims match the code. Needs sentinel-vision 0.5.2 or newer for the partner features (released
+together with it); older versions are reported by `status` and not used.
 
 ### Security
 - A process is never exempt from detection because of its name: an operating-system
@@ -36,7 +37,7 @@ claims match the code. Works with sentinel-vision 0.5.1 and newer; tested with 0
 ### sentinel-vision integration
 - sentinel-vision is found only in its install folder (`/opt/SentinelVision`,
   `/Applications/SentinelVision.app/Contents/MacOS`, `Program Files\Sentinel Vision`),
-  checked for an administrator-only owner and version 0.5.1 or newer; standalone, a package
+  checked for an administrator-only owner and version 0.5.2 or newer; standalone, a package
   merely named `sentinel_vision` is never imported. `foldward-cli status` shows the path and
   version, or why it wasn't trusted [AG-A04, AG-C04, INT-02, INT-03].
 - Calls follow sentinel-vision's published contract: `--` before file names and addresses,
