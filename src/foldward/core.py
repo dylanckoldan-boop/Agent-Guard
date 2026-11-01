@@ -33,6 +33,7 @@ from foldward.integrations import partner_status
 from foldward.integrations import sentinel_vision as sv_integ
 from foldward.mesh import Consensus, MeshSnapshot, MixChannel
 from foldward.osutil import write_private
+from foldward.pending import PendingCopies
 from foldward.quarantine import Quarantine
 from foldward.registry import RevocationRegistry
 from foldward.response import RUNG_BY_NAME, Containment, Response, Rung
@@ -178,6 +179,13 @@ class Foldward:
     # Time allowed per scan for checking whether programs that are not agent
     # candidates hold a canary open (AG-A02); the sweep resumes where it stopped.
     SWEEP_BUDGET_S = 0.5
+    # After a failed copy to Sentinel Vision's protected log, wait this long before trying again (INT-05, INT-N02).
+    MIRROR_RETRY_S = 60.0
+    # How often to ask Sentinel Vision how full the protected log is, and the share that is reported (INT-N01).
+    LOG_ROOM_CHECK_S = 6 * 3600.0
+    LOG_ROOM_WARN_SHARE = 0.8
+    # A full protected log is reported at most this often (INT-N01).
+    LOG_FULL_REPORT_S = 3600.0
 
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or Settings.load()
@@ -214,7 +222,11 @@ class Foldward:
         self._observed: set[tuple[int, str]] = set()  # (pid, canary) contacts already reported
         self._stale_reported: set[tuple[str, int]] = set()
         self._sweep_cursor = 0
-        self._pending_mirror: list[dict] = []  # protected-log records still to be copied (INT-05)
+        # protected-log records still to be copied, saved so they survive a restart (INT-05, INT-N02)
+        self._pending = PendingCopies(state / "protected-log-queue.json")
+        self._next_mirror_try = 0.0  # time.monotonic() before which a failed copy isn't retried
+        self._next_room_check = 0.0  # time.monotonic() of the next check of the protected log's room
+        self._full_reported = float("-inf")  # time.monotonic() a full protected log was last reported
         self.alert_listeners: list[Alert] = []
         self._lock = threading.Lock()
         self._load_agents()  # restore sanctioned identities from a previous run
@@ -254,6 +266,19 @@ class Foldward:
         if self.registry.rejected_on_load:
             self.warnings.append(
                 f"{self.registry.rejected_on_load} saved revocation(s) had no valid signature and were ignored."
+            )
+        if self._pending.load_problem:
+            kept = f" It was kept as {self._pending.kept_as}." if self._pending.kept_as else ""
+            self.warnings.append(
+                "The list of containment records waiting for Sentinel Vision's protected log was damaged: "
+                f"{self._pending.load_problem}.{kept} The records themselves are in Foldward's own audit."
+            )
+        elif len(self._pending):
+            n = len(self._pending)
+            where = "Foldward copies them when it can" if self.sv is not None else "Sentinel Vision isn't available now"
+            self.warnings.append(
+                f"{n} containment record(s) from an earlier run are still waiting to be copied to Sentinel Vision's "
+                f"protected log; {where}. They are in Foldward's own audit meanwhile."
             )
         if "ML-DSA" not in self.signer.scheme:
             if post_quantum_available():
@@ -376,6 +401,7 @@ class Foldward:
         with self._lock:
             self._recheck_suspended()  # re-freeze anything resumed since the last scan (AG-A08)
             self._retry_mirrors()
+            self._check_protected_log_room()
             sanctioned = self._sanctioned_pids()
             detections = self.detector.detect(sanctioned, decoy_pids)
             self._report_stale_pids(detections, sanctioned)
@@ -558,39 +584,119 @@ class Foldward:
     def _mirror_to_protected_log(self, record: dict) -> None:
         """When sentinel-vision is present, also append the record to its
         tamper-proof, append-only plugin log, so a compromised agent cannot erase
-        its own containment record even if it reaches Foldward's own store. A copy
-        that fails is reported and retried at the next scan (INT-05)."""
+        its own containment record even if it reaches Foldward's own store.
+
+        The record is queued, in an owner-only file, before it is sent, so a copy
+        that fails survives a restart (INT-N02); copies go oldest first. A failed
+        copy is reported and retried (INT-05), and a full log is reported as
+        possible tampering, since any program running as the user can fill it
+        (INT-N01)."""
         if self.sv is None:
             return
-        ok, detail = self._try_mirror(record)
-        if not ok:
-            self._pending_mirror.append(record)
-            self.audit.append("mirror.failed", {"detail": detail, "pending": len(self._pending_mirror)})
-            self._alert(
-                "Containment record not yet protected",
-                f"It couldn't be copied to Sentinel Vision's protected log ({detail}). Foldward will retry; "
-                "the record is in Foldward's own audit meanwhile.",
-                "warning",
-            )
+        saved = self._pending.add(record)
+        ok, detail, full = self._flush_pending(first=record)
+        if ok:
+            return
+        self.audit.append("mirror.failed", {"detail": detail, "pending": len(self._pending), "saved": saved})
+        if full and self._report_full_log(detail):
+            return
+        kept = (
+            "Foldward keeps it, also across restarts, and retries every minute"
+            if saved
+            else "Foldward retries every minute, but couldn't save it to disk, so it is lost if Foldward closes first"
+        )
+        self._alert(
+            "Containment record not yet protected",
+            f"It couldn't be copied to Sentinel Vision's protected log ({detail}). {kept}; "
+            "the record is in Foldward's own audit meanwhile.",
+            "warning",
+        )
 
-    def _try_mirror(self, record: dict) -> tuple[bool, str]:
+    def _try_mirror(self, record: dict) -> tuple[bool, str, bool]:
+        """(copied, what went wrong, whether the log refused it because it is full)."""
         try:
             res = self.sv.plugin_log_append(record)
         except Exception as exc:
-            return False, str(exc)
-        return bool(getattr(res, "ok", False)), str(getattr(res, "detail", res))
+            return False, str(exc), False
+        return (
+            bool(getattr(res, "ok", False)),
+            str(getattr(res, "detail", res)),
+            getattr(res, "full", False) is True,
+        )
+
+    def _flush_pending(self, first: dict | None = None) -> tuple[bool, str, bool]:
+        """Copy the waiting records, oldest first, and stop at the first that fails, so the
+        protected log keeps their order. Returns (all copied, what went wrong, log full).
+        ``first`` is a record queued just now: copying it isn't a retry."""
+        detail, full, copied = "", False, 0
+        while len(self._pending):
+            record = self._pending.oldest()
+            ok, detail, full = self._try_mirror(record)
+            if not ok:
+                break
+            self._pending.drop_oldest()
+            copied += 1
+            if record is not first:
+                self.audit.append("mirror.retried", {"agent": record.get("agent")})
+        if copied:
+            self._pending.save()
+        if len(self._pending):
+            self._next_mirror_try = time.monotonic() + self.MIRROR_RETRY_S
+            return False, detail, full
+        return True, "", False
 
     def _retry_mirrors(self) -> None:
-        if self.sv is None or not self._pending_mirror:
+        """At each scan, retry waiting copies, at most once a minute while they fail."""
+        if self.sv is None or not len(self._pending) or time.monotonic() < self._next_mirror_try:
             return
-        still: list[dict] = []
-        for record in self._pending_mirror:
-            ok, _detail = self._try_mirror(record)
-            if ok:
-                self.audit.append("mirror.retried", {"agent": record.get("agent")})
-            else:
-                still.append(record)
-        self._pending_mirror = still
+        ok, detail, full = self._flush_pending()
+        if not ok and full:
+            self._report_full_log(detail)  # waiting records stay queued either way
+
+    def _report_full_log(self, detail: str) -> bool:
+        """A full protected log keeps every later containment record out of it (INT-N01).
+        Reported as possible tampering, at most once an hour; returns whether it was reported now."""
+        now = time.monotonic()
+        if now - self._full_reported < self.LOG_FULL_REPORT_S:
+            return False
+        self._full_reported = now
+        self.audit.append("mirror.log_full", {"detail": detail, "pending": len(self._pending)})
+        self._alert(
+            "Sentinel Vision's protected log is full",
+            f"Containment records can't be added to Foldward's protected log in Sentinel Vision ({detail}). "
+            f"Foldward keeps them ({len(self._pending)} waiting) and they are in its own signed audit. Any program "
+            "running as you can add records to that log, so it may have been filled on purpose to keep them out. "
+            "See what filled it with `sentinel-vision-cli plugin-log read foldward`; Sentinel Vision's "
+            "docs/PLUGINS.md says how an administrator makes room.",
+            "danger",
+        )
+        return True
+
+    def _check_protected_log_room(self) -> None:
+        """Every few hours, ask Sentinel Vision (0.5.3 or newer) how full Foldward's
+        protected log is and warn from 80%, before a full log keeps records out (INT-N01)."""
+        if self.sv is None or time.monotonic() < self._next_room_check:
+            return
+        self._next_room_check = time.monotonic() + self.LOG_ROOM_CHECK_S
+        try:
+            room = self.sv.plugin_log_room()
+        except Exception:
+            room = None  # an older Sentinel Vision, or a stand-in without the call
+        if not isinstance(room, dict):
+            return
+        used, limit = room.get("bytes"), room.get("limit")
+        if not (isinstance(used, int) and isinstance(limit, int) and limit > 0):
+            return
+        if used < self.LOG_ROOM_WARN_SHARE * limit:
+            return
+        self.audit.append("mirror.log_filling", {"bytes": used, "limit": limit})
+        self._alert(
+            "Sentinel Vision's protected log is filling up",
+            f"Foldward's protected log in Sentinel Vision is {min(100, round(100 * used / limit))}% full. Any "
+            "program running as you can add records to it, so it may be being filled on purpose to keep "
+            "containment records out. See what filled it with `sentinel-vision-cli plugin-log read foldward`.",
+            "warning",
+        )
 
     def release(self, d: DetectedAgent):
         res = self.response.release(d)

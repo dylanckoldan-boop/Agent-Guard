@@ -97,10 +97,14 @@ def test_every_command_foldward_runs_follows_the_contract(cli, tmp_path):
     adapter.quarantine_add(target, "contained by Foldward")
     adapter.plugin_log_append({"event": "pacify"})
     adapter.plugin_log_verify()  # the current log and the pre-rename one
+    adapter.plugin_log_room()  # how full the current log is
     adapter.block_ip("45.12.10.9")
     adapter.scan(target)
 
-    expected = ["quarantine add", "plugin-log append", "plugin-log verify", "plugin-log verify", "net block", "scan"]
+    expected = [
+        "quarantine add", "plugin-log append", "plugin-log verify", "plugin-log verify", "plugin-log verify",
+        "net block", "scan",
+    ]  # fmt: skip
     assert len(cli.calls) == len(expected)
     for argv, name in zip(cli.calls, expected):
         assert _follows(argv, _command(name)["argv"]), (name, argv)
@@ -118,9 +122,10 @@ def _reading(adapter: sv.SentinelVisionAdapter, name: str):
         res = adapter.quarantine_add("/x/agent.bin", "contained by Foldward")
         return res.status, res.item_id
     if name == "plugin-log append":
-        return adapter.plugin_log_append({"event": "pacify"}).ok
+        res = adapter.plugin_log_append({"event": "pacify"})
+        return res.ok, res.full
     if name == "plugin-log verify":
-        return adapter.plugin_log_verify()["intact"]
+        return adapter.plugin_log_verify()["intact"], adapter.plugin_log_room()
     if name == "net block":
         return adapter.block_ip("45.12.10.9")
     if name == "scan":
@@ -133,10 +138,11 @@ EXPECTED = {
     ("quarantine add", "moved"): lambda got: got == ("ok", _case("quarantine add", "moved")["example"].strip()),
     ("quarantine add", "refused"): lambda got: got == ("refused", None),  # final: never moved another way
     ("quarantine add", "error"): lambda got: got == ("unavailable", None),  # Foldward's own vault takes over
-    ("plugin-log append", "appended"): lambda got: got is True,
-    ("plugin-log append", "error"): lambda got: got is False,
-    ("plugin-log verify", "intact"): lambda got: got is True,
-    ("plugin-log verify", "broken"): lambda got: got is False,
+    ("plugin-log append", "appended"): lambda got: got == (True, False),
+    ("plugin-log append", "error"): lambda got: got == (False, False),  # reported and retried (INT-05)
+    ("plugin-log append", "full"): lambda got: got == (False, True),  # possible tampering (INT-N01)
+    ("plugin-log verify", "intact"): lambda got: got == (True, {"bytes": 158, "limit": 52428800}),
+    ("plugin-log verify", "broken"): lambda got: got == (False, {"bytes": 316, "limit": 52428800}),
     ("net block", "blocked"): lambda got: got == "requested OS firewall block of 45.12.10.9",
     ("net block", "error"): lambda got: got.startswith("firewall block of 45.12.10.9 failed (exit 2)"),
     ("scan", "clean"): lambda got: got == "clean",

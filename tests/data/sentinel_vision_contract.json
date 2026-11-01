@@ -1,6 +1,6 @@
 {
-  "about": "The command-line contract between sentinel-vision-cli and companion programs such as Foldward. docs/PLUGINS.md explains it in words; tests/test_plugin_contract.py checks the real tool against this file on every change. Companion programs keep a copy and replay the examples in their own tests. Change it only together with plugin_api.API_VERSION and a note in docs/PLUGINS.md.",
-  "sentinel_vision": "0.5.2",
+  "about": "The command-line contract between sentinel-vision-cli and companion programs such as Foldward. docs/PLUGINS.md explains it in words; tests/test_plugin_contract.py checks the real tool against this file on every change. Companion programs keep a copy and replay the examples in their own tests. Additions keep plugin_api.API_VERSION; a change that breaks callers raises it. Every change gets a note in docs/PLUGINS.md.",
+  "sentinel_vision": "0.5.3",
   "plugin_api_version": 1,
   "arguments": "Put -- before any file name or address, so it can never be read as an option.",
   "exit_codes": {
@@ -14,7 +14,7 @@
       "name": "version",
       "argv": ["--version"],
       "cases": [
-        {"case": "ok", "exit": 0, "stdout_pattern": "\\d+\\.\\d+\\.\\d+\\s*", "example": "0.5.2\n"}
+        {"case": "ok", "exit": 0, "stdout_pattern": "\\d+\\.\\d+\\.\\d+\\s*", "example": "0.5.3\n"}
       ]
     },
     {
@@ -31,15 +31,16 @@
       "argv": ["plugin-log", "append", "<name>", "--json", "<record>"],
       "cases": [
         {"case": "appended", "exit": 0, "stdout_pattern": "\\d+\\s*", "example": "1\n"},
-        {"case": "error", "exit": 2, "example": "", "example_stderr": "error: Expecting value: line 1 column 1 (char 0)\n"}
+        {"case": "error", "exit": 2, "example": "", "example_stderr": "error: Expecting value: line 1 column 1 (char 0)\n"},
+        {"case": "full", "exit": 2, "example": "", "example_stderr": "error: log is full (50 MB); nothing was written\n"}
       ]
     },
     {
       "name": "plugin-log verify",
       "argv": ["plugin-log", "verify", "<name>"],
       "cases": [
-        {"case": "intact", "exit": 0, "json_keys": ["entries", "intact", "protected"], "example": "{\"intact\": true, \"entries\": 1, \"protected\": false}\n"},
-        {"case": "broken", "exit": 1, "json_keys": ["entries", "intact", "protected"], "example": "{\"intact\": false, \"entries\": 2, \"protected\": false}\n"}
+        {"case": "intact", "exit": 0, "json_keys": ["bytes", "entries", "intact", "limit", "protected"], "example": "{\"intact\": true, \"entries\": 1, \"bytes\": 158, \"limit\": 52428800, \"protected\": false}\n"},
+        {"case": "broken", "exit": 1, "json_keys": ["bytes", "entries", "intact", "limit", "protected"], "example": "{\"intact\": false, \"entries\": 2, \"bytes\": 316, \"limit\": 52428800, \"protected\": false}\n"}
       ]
     },
     {
