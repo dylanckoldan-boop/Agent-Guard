@@ -86,7 +86,7 @@ def test_cryptomigrate_adapter_degrades_to_notes_never_exceptions(tmp_path):
     assert adapter.crypto_scan(str(tmp_path)) == {
         "available": False,
         "findings": [],
-        "detail": "cryptomigrate not installed",
+        "detail": "planned: Foldward doesn't call cryptomigrate yet",
     }
 
 
@@ -118,12 +118,25 @@ def test_the_guard_runs_standalone_with_no_partners(guard):
 # ----------------------------------------------------------------- partners present
 def test_an_importable_package_is_not_trusted_as_sentinel_vision(monkeypatch):
     # Anything named sentinel_vision on the Python path (a squatted PyPI package, a planted
-    # folder) is ignored when Foldward runs on its own (INT-03); cryptomigrate is unchanged.
+    # folder) is ignored when Foldward runs on its own (INT-03).
     monkeypatch.setitem(sys.modules, "sentinel_vision", types.ModuleType("sentinel_vision"))
-    monkeypatch.setitem(sys.modules, "cryptomigrate", types.ModuleType("cryptomigrate"))
 
     assert sentinel_vision.probe() == (False, "not installed")
-    assert cryptomigrate.probe() == (True, "in-process (import cryptomigrate)")
+
+
+def test_cryptomigrate_is_found_without_being_imported(monkeypatch, tmp_path):
+    # a module planted on the Python path is looked up, never run inside Foldward (AG-A04)
+    planted = tmp_path / "cryptomigrate"
+    planted.mkdir()
+    (planted / "__init__.py").write_text("raise SystemExit('planted code ran inside Foldward')\n")
+    monkeypatch.delitem(sys.modules, "cryptomigrate")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    present, how = cryptomigrate.probe()
+
+    assert present is True
+    assert "detected only, not used yet" in how
+    assert "cryptomigrate" not in sys.modules
 
 
 def test_when_hosted_by_sentinel_vision_the_host_is_used_in_process(monkeypatch):
@@ -140,26 +153,17 @@ def test_cryptomigrate_on_path_is_detected_through_its_cli(monkeypatch):
     on_path = types.SimpleNamespace(which=lambda name, *args, **kwargs: f"/opt/bin/{name}")
     monkeypatch.setattr(cryptomigrate, "shutil", on_path)
 
-    assert cryptomigrate.probe() == (True, "cli (cryptomigrate)")
+    assert cryptomigrate.probe() == (True, "command-line tool /opt/bin/cryptomigrate; detected only, not used yet")
 
 
-def test_cryptomigrate_becomes_the_notary_when_it_is_present(monkeypatch, signer):
+def test_cryptomigrate_never_signs_as_the_notary(monkeypatch, signer):
+    # cryptomigrate takes no part in the attestation yet, so it is never named as its notary (AG-C01)
     monkeypatch.setitem(sys.modules, "cryptomigrate", types.ModuleType("cryptomigrate"))
     adapter = cryptomigrate.CryptomigrateAdapter()
 
-    assert adapter.available is True
-    assert adapter.attest({}, signer)["notary"] == "cryptomigrate"
-
-
-def test_cryptomigrate_scan_errors_are_reported_not_raised(monkeypatch, tmp_path):
-    # present, but exposing no discovery entry point (an older or different version)
-    monkeypatch.setitem(sys.modules, "cryptomigrate", types.ModuleType("cryptomigrate"))
-
-    result = cryptomigrate.CryptomigrateAdapter().crypto_scan(str(tmp_path))
-
-    assert result["available"] is True
-    assert result["findings"] == []
-    assert "scan error" in result["detail"]
+    assert adapter.available is False
+    assert adapter.attest({}, signer)["notary"] == "foldward"
+    assert adapter.crypto_scan("/some/dir")["detail"].startswith("planned")
 
 
 _ITEM_ID = "0123456789abcdef0123456789abcdef"

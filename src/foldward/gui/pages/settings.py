@@ -48,7 +48,7 @@ class SettingsPage(Page):
         p = self.guard.partners
         rl.addWidget(self._partner("sentinel-vision", "hardened vault · protected log", p.sentinel_vision))
         rl.addWidget(label(f"sentinel-vision: {p.sentinel_vision_how}", obj="muted", wrap=True))
-        rl.addWidget(self._partner("cryptomigrate", "crypto-posture scan · PQ-signed attestation", p.cryptomigrate))
+        rl.addWidget(self._partner("cryptomigrate", "detected only · crypto scan and notary planned", p.cryptomigrate))
         rl.addWidget(label("Both optional. Foldward runs fully standalone with neither.", obj="muted", wrap=True))
 
         rl.addSpacing(8)

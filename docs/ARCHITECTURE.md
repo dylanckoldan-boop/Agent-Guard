@@ -116,8 +116,8 @@ healthy agents) nor forge an "all-clear" to quietly un-revoke a contained agent.
 a SHA-256 chain; any edit, deletion or reorder breaks verification. The chain
 head can be signed with a hybrid **ML-DSA-65 (FIPS 204) + Ed25519** signature, so
 an auditor gets both integrity and origin. Two-audience by design: opaque to a
-triggering agent, transparent to the human circle. Same mechanism as the
-Cryptomigrate project's attestation log.
+triggering agent, transparent to the human circle. The hash chain is the same
+idea as the Cryptomigrate project's audit log, which is chained but not signed.
 
 ## The "many doors" principle — control plane vs data plane
 
@@ -204,11 +204,14 @@ see `docs/SENTINEL_VISION_INTEGRATION.md`):
 * **scan(binary)** (planned) — a malware verdict from SV's engines; available
   through the adapter, not yet used in decisions.
 
-**cryptomigrate** (the notary and crypto lens):
-* **crypto_scan(dir)** surfaces weak crypto (hardcoded keys, DES/SHA-1, obsolete
-  TLS) in a flagged agent's install directory — a genuinely new risk dimension.
-* **attest(state)** emits a PQ-signed attestation of oversight state in CM's
-  format for auditors.
+**cryptomigrate** (planned as the notary and crypto lens; today it is only
+detected, by looking it up without importing or running it):
+* **crypto_scan(dir)** (planned) — weak crypto (hardcoded keys, DES/SHA-1,
+  obsolete TLS) in a flagged agent's install directory. cryptomigrate 1.1 has no
+  single-directory scan Foldward can call yet.
+* **attest(state)** — Foldward's own attestation of its oversight state, signed
+  with its circle key; it always names Foldward as the notary. Notarisation in
+  cryptomigrate's format is planned.
 
 Division of labour: **Foldward is the brain** (detect, decide, contain);
 **sentinel-vision lends its hands** (scan, block, vault, the Wall);

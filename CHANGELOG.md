@@ -51,6 +51,13 @@ claims match the code. Works with sentinel-vision 0.5.1 and newer; tested with 0
   and retried [INT-05].
 - Plugin pages are labelled "Foldward · …" (their `ag_*` keys are unchanged).
 
+### cryptomigrate
+- cryptomigrate is detected by looking it up, never by importing it, so a module that merely
+  has its name is never run inside Foldward [AG-A04].
+- Its weak-crypto scan and notarisation are marked planned (the scan called an entry point
+  cryptomigrate doesn't have), and attestations always name Foldward as the notary: they are
+  signed with Foldward's circle key whether or not cryptomigrate is installed [AG-C01].
+
 ### Supply chain and release
 - CI installs from hash-locked requirements (`requirements/*.lock`), runs ruff with its
   security rules, and fails on a known-vulnerable locked dependency [AG-A10].
