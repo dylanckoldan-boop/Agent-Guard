@@ -184,17 +184,13 @@ dependency, not an optional extra. Only a guarded `import` / CLI probe in
 
 When installed alongside it, each is a pure upgrade:
 
-**sentinel-vision** (the hands) — via a guarded `import sentinel_vision` or
-`sentinel-vision-cli`:
-* **scan(binary)** can turn "behaved oddly" into a verdict — known malware,
-  validly signed, or clean. Available through the adapter; not yet invoked
-  automatically in the scan loop.
-* **block_egress(ip)** is a real system-wide OS-firewall block against known
-  criminal netblocks. The hook exists for a future "cut egress" rung; the pacify
-  ladder does not climb to it automatically yet.
-* **quarantine add (binary)** hands the neutralized binary to SV's hardened,
-  service-protected vault with rollback — the file is moved, and SV becomes the
-  system-of-record.
+**sentinel-vision** (the hands) — reached only after Foldward checks it is the real
+program: its own package when sentinel-vision hosts Foldward as a plugin, otherwise
+`sentinel-vision-cli` from its install folder (owner-checked, version 0.5.1 or newer;
+see `docs/SENTINEL_VISION_INTEGRATION.md`):
+* **quarantine add (binary or script)** hands the contained agent's file to SV's
+  hardened, service-protected vault with rollback — the file is moved, and SV
+  becomes the system-of-record. A refusal from SV is final.
 * **protected plugin log** — Foldward mirrors every containment (with its
   signed audit head) into SV's append-only `plugin-log`, which on Windows the
   protection service keeps where a program running as the user can add and read
@@ -203,6 +199,10 @@ When installed alongside it, each is a pure upgrade:
   Layer-4 Wall: made true at the OS level rather than by an un-passed reference.
   (SV's `config.plugin_dir` is an ordinary user folder and is deliberately *not*
   used for these records.)
+* **block_egress(ip)** (planned) — a real system-wide OS-firewall block; the hook
+  exists, but the pacify ladder doesn't climb to it automatically yet.
+* **scan(binary)** (planned) — a malware verdict from SV's engines; available
+  through the adapter, not yet used in decisions.
 
 **cryptomigrate** (the notary and crypto lens):
 * **crypto_scan(dir)** surfaces weak crypto (hardcoded keys, DES/SHA-1, obsolete

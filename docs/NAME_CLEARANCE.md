@@ -44,10 +44,18 @@ Palisade Research), which is why a distinctive coined compound was chosen.
 - Reserve the PyPI name with trusted publishing and the GitHub repo name.
 - Optionally secure a domain (e.g. `foldward.io`/`.com`) — not checked here.
 
+## Still to do (owner)
+
+- **Claim `foldward` on PyPI** (checked 31 Oct 2026: still unregistered). Until it is
+  claimed, anyone can publish a package under the name, and a `pip install foldward`
+  typed by a person — or invented by an AI assistant — would install it. A first
+  release with PyPI trusted publishing, or at least an account-owned placeholder,
+  closes that gap. Until then every install command names a tagged release of
+  this repository.
+
 ## Integration note (sentinel-vision)
 
-The sentinel-vision plugin-log name is deliberately kept as `agent-guard`
-(`integrations/sentinel_vision.py`), so records still land where sentinel-vision
-(unchanged) files them. Renaming that identifier is a cross-project change to make
-with the sentinel-vision maintainer in one coordinated release; until then,
-Foldward keeps reading and writing under the old plugin-log name.
+The rename was released in step with sentinel-vision 0.5.1: Foldward writes its
+records to the `foldward` plugin log, sentinel-vision files `quarantine add`
+requests under `foldward` by default, and both still read and verify the old
+`agent-guard` log, so records from before the rename aren't orphaned.

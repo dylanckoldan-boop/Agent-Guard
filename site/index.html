@@ -89,12 +89,12 @@
 
     <section id="layers">
       <h2>Defence in depth, in four layers</h2>
-      <p class="lead">Defeating any one layer still leaves the next. The guarantees live in the ladder, the signed registry and the independent controls — never in an agent staying fooled.</p>
+      <p class="lead">The layers work independently: identity checks, canary files, the containment ladder and the audit don't depend on each other. All of them run with your rights, so a program running as you can interfere with them — see <a href="#limits">what Foldward can't do yet</a>.</p>
       <div class="cards">
         <div class="card"><div class="n">Layer 1</div><h3>Admission</h3><p>Agents you sanction carry a signed, least-privilege identity, checked against the revocation registry. An unregistered agent is flagged for review, not silently trusted.</p></div>
-        <div class="card"><div class="n">Layer 2</div><h3>The net</h3><p>No legitimate workflow opens a planted decoy, so contact is an intrusion — a near-zero-false-positive signal, because only the bait itself trips the wire.</p></div>
+        <div class="card"><div class="n">Layer 2</div><h3>The net</h3><p>Canary files that no normal workflow opens. An unregistered agent holding one open is contained; a registered agent is flagged for you to decide; other programs, such as antivirus or backup tools, are reported and never contained.</p></div>
         <div class="card"><div class="n">Layer 3</div><h3>Pacify ladder</h3><p>Throttle → quarantine → revoke → suspend → terminate, climbing only as far as the threat demands, all inside your own perimeter.</p></div>
-        <div class="card"><div class="n">Layer 4</div><h3>Consensus + audit</h3><p>A flag contains only after a quorum agrees (a decoy touch is self-authorizing); every step lands in a hash-chained, tamper-evident audit whose head can be post-quantum signed.</p></div>
+        <div class="card"><div class="n">Layer 4</div><h3>Consensus + audit</h3><p>A flag contains only after a quorum agrees (a canary held open by an unregistered agent is self-authorizing); every step lands in a hash-chained, tamper-evident audit whose head can be post-quantum signed.</p></div>
       </div>
       <p class="mt-lg"><a href="https://github.com/dylanckoldan-boop/Foldward/blob/main/docs/ARCHITECTURE.md">Read the full architecture →</a></p>
     </section>
@@ -103,17 +103,16 @@
       <h2>Stronger with sentinel-vision</h2>
       <div class="two">
         <div>
-          <p class="lead">Foldward runs fully on its own. When <a href="https://dylanckoldan-boop.github.io/sentinel-vision/">sentinel-vision</a> — a free, open-source antimalware app — is installed alongside it, the net gains hands: Foldward catches a category sentinel-vision can't see on its own (a rogue <em>agent</em>, judged by identity and behaviour), and can call sentinel-vision's engines to scan the binary, block egress at the OS firewall, and lock the binary in its hardened vault.</p>
+          <p class="lead">Foldward runs fully on its own. When <a href="https://dylanckoldan-boop.github.io/sentinel-vision/">sentinel-vision</a> — a free, open-source antimalware app — is installed alongside it, the net gains hands: Foldward catches a category sentinel-vision can't see on its own (a rogue <em>agent</em>, judged by identity and behaviour), hands a contained agent's file to sentinel-vision's hardened vault, and records every containment in its protected log. Foldward checks it is talking to the real sentinel-vision: its install folder, the folder's owner and its version.</p>
           <p class="lead">Together they cover both the hijacked/malware agent and the misaligned one — neither tool fully catches alone. Foldward even appears as a tab inside sentinel-vision, with no dependency in either direction.</p>
           <p><a class="btn" href="https://dylanckoldan-boop.github.io/sentinel-vision/">Visit sentinel-vision</a></p>
         </div>
         <div class="panel">
           <p class="pill">optional · never a dependency</p>
           <ul class="ticks mt-sm">
-            <li>Scan an agent's binary for a malware verdict</li>
-            <li>Block its egress at the system firewall</li>
-            <li>Move the binary into an encrypted vault with rollback</li>
+            <li>Move the agent's file into an encrypted vault with rollback</li>
             <li>Mirror every containment into an append-only log an agent can't erase — on Windows, via sentinel-vision's protection service</li>
+            <li>Planned, not built yet: scanning an agent's binary for a malware verdict, and blocking its egress at the system firewall automatically</li>
           </ul>
         </div>
       </div>
@@ -149,10 +148,10 @@
       <h2>What Foldward can't do yet</h2>
       <p class="lead">It is v0.x research software, shared in the open so its limits are as visible as its design. Being honest about these is part of the point.</p>
       <ul class="ticks">
-        <li><strong>It runs as you.</strong> Foldward has your privileges, not more. An agent running with your rights can interfere with it; it is oversight, not a sandbox or a kernel-level guard.</li>
-        <li><strong>Detection is heuristic.</strong> The first-pass net scores processes on identity, reach and behaviour, and a determined agent can evade it. The decoy layer lures and signals; it is not safety-rated.</li>
+        <li><strong>It runs as you.</strong> Foldward has your privileges, not more. A program running with your rights can interfere with it, and can read its keys and change its saved state; it is oversight, not a sandbox or a kernel-level guard.</li>
+        <li><strong>Detection is heuristic.</strong> The first-pass net scores processes on identity, reach and behaviour, and a determined agent can evade it. A canary is seen only while it is open when Foldward scans, so a quick read between two scans can go unnoticed. The decoy layer lures and signals; it is not safety-rated.</li>
         <li><strong>It acts only on this computer.</strong> Containment is confined to resources you own — deny, revoke, isolate, suspend. It never reaches into an agent's own infrastructure.</li>
-        <li><strong>Some features need a partner or an OS privilege.</strong> Blocking egress at the firewall and the tamper-proof containment log come from sentinel-vision when it is installed; process control needs the rights to signal the target.</li>
+        <li><strong>Some features need a partner or an OS privilege.</strong> The tamper-proof containment log comes from sentinel-vision when it is installed (on Windows); process control needs the rights to signal the target.</li>
         <li><strong>Parts are still a prototype.</strong> The "many doors" oversight channel and the decoy-action glamour are designs, not yet wired to a live transport. The consensus quorum runs in one process today.</li>
         <li><strong>No warranty.</strong> It is provided as is, under the MIT licence. You decide what it watches and what it may act on.</li>
       </ul>
@@ -161,9 +160,7 @@
     <section id="get">
       <h2>Get it</h2>
       <p class="lead">Python 3.10+. The core needs only <code>psutil</code> and <code>cryptography</code>; add the desktop app with the <code>gui</code> extra.</p>
-      <pre><code>git clone https://github.com/dylanckoldan-boop/Foldward
-cd Foldward
-pip install -e ".[gui]"
+      <pre><code>pip install "foldward[gui] @ git+https://github.com/dylanckoldan-boop/Foldward@v0.2.0"
 
 foldward-cli status     # the command line
 foldward                # the desktop app</code></pre>
@@ -199,9 +196,11 @@ foldward                # the desktop app</code></pre>
       <a href="https://github.com/dylanckoldan-boop/Foldward/security/advisories/new">Report a vulnerability</a>
       <a href="privacy.html">Privacy</a>
       <a href="terms.html">Terms</a>
+      <a href="accessibility.html">Accessibility</a>
       <a href="https://dylanckoldan-boop.github.io/sentinel-vision/">sentinel-vision</a>
     </div>
-    <p>Foldward is a research project. The deception layers are not safety-rated; the guarantees live in the pacify ladder, the signed registry and the independent controls. MIT licensed · © 2026 Dylan C. Koldan.</p>
+    <p class="fineprint">Foldward 0.2.0 · 31 October 2026</p>
+    <p>Foldward is a research project. The deception layers are not safety-rated; the guarantees live in the pacify ladder, the signed registry and the independent controls, which all run with your rights. MIT licensed · © 2026 Dylan C. Koldan.</p>
   </div>
 </footer>
 </body>

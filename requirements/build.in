@@ -1,0 +1,5 @@
+# Tools release.yml uses to build the wheel and source archive (build runs with --no-isolation).
+#   uv pip compile requirements/build.in --python-version 3.12 --python-platform x86_64-manylinux_2_39 --generate-hashes -o requirements/build.lock
+build>=1.2
+setuptools>=68
+wheel>=0.43
